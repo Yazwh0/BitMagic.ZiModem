@@ -4,6 +4,7 @@
 # patched sketch behaves correctly -- see docs/native-wrapper-spec.md section 11.2.
 add_executable(zimodem_core_tests
     test_smoke.cpp
+    test_protocol.cpp
 )
 target_link_libraries(zimodem_core_tests PRIVATE zimodem_core zimodem_hal Catch2::Catch2WithMain)
 
