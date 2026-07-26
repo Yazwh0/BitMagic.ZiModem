@@ -113,8 +113,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # --repo is required here: this job never runs actions/checkout (it only
+          # needs the two downloaded artifacts), so there's no .git directory for gh to
+          # infer the repository from otherwise.
           gh release create "${GITHUB_REF_NAME}" \
             "zimodem-host-linux-x64-${GITHUB_REF_NAME}.tar.gz" \
             "zimodem-host-win-x64-${GITHUB_REF_NAME}.zip" \
+            --repo "${GITHUB_REPOSITORY}" \
             --title "ZiModem host ${GITHUB_REF_NAME}" \
             --notes "Native zimodem_host builds for Windows x64 and Linux x64. See README.md for what each archive contains."
