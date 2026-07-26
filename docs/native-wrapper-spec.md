@@ -687,17 +687,18 @@ dispose safety, an end-to-end smoke test through the full managed stack. Current
 `ZiModem.Net` has only been exercised manually through `tools/ZiModem.Console`, on both
 Windows and Linux.
 
-### 11.4 CI matrix — automated via GitLab CI
+### 11.4 CI matrix — automated via GitHub Actions
 
-`.gitlab-ci.yml` (repo root) builds and tests both platforms on every push: `build:linux`
-(`ubuntu:22.04`, GCC) and `build:windows` (`saas-windows-medium-amd64`, MSVC located via
-`vswhere` — never a hardcoded VS path, since the runner image's VS version isn't
-something this repo controls), each followed by a `test:*` job that runs all three
-native test binaries directly (not `ctest`, so the artifact only needs to carry
-`build/*/bin/`, not the whole CMake build tree). On a tagged commit, `package:linux` /
-`package:windows` archive each platform's `bin/` output, upload it to the project's
-generic package registry, and a `release` job (GitLab's `release-cli`) publishes both
-as assets on a GitLab Release named after the tag.
+`.github/workflows/ci.yml` builds and tests both platforms on every push and pull
+request: `build-linux`/`test-linux` (`ubuntu-latest`, GCC — CMake/Ninja/GCC all ship
+preinstalled) and `build-windows`/`test-windows` (`windows-latest`, MSVC — the MSVC dev
+environment is set up via the `ilammy/msvc-dev-cmd` action rather than anything hardcoded
+in this repo, since the runner image's VS version isn't something this repo controls).
+Each `test-*` job runs all three native test binaries directly (not `ctest`, so the
+uploaded artifact only needs to carry `build/native/bin/`, not the whole CMake build
+tree). On a tagged commit, the `release` job downloads both platforms' build artifacts,
+archives each one, and publishes them as assets on a GitHub Release named after the tag
+via the `gh` CLI.
 
 ## 12. Open Decisions & Risks
 

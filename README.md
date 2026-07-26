@@ -108,11 +108,11 @@ directory. Useful flags:
 
 ## CI
 
-`.gitlab-ci.yml` builds and tests both platforms on every push (`build:linux` +
-`test:linux` on `ubuntu:22.04`, `build:windows` + `test:windows` on a
-`saas-windows-medium-amd64` runner). Pushing a tag additionally packages each
-platform's `build/*/bin/` output and publishes it as an asset on a GitLab Release for
-that tag.
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) builds and tests both platforms
+on every push and pull request (`build-linux`/`test-linux` on `ubuntu-latest`,
+`build-windows`/`test-windows` on `windows-latest`). Pushing a tag additionally
+packages each platform's `build/native/bin/` output and publishes it as an asset on a
+GitHub Release for that tag.
 
 ## Updating the vendored firmware
 
