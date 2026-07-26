@@ -1,0 +1,9 @@
+# Unified diffs are byte-exact: git apply's context matching treats a trailing \r as
+# ordinary content, not ignorable whitespace. These patches are applied against
+# build/vendor/zimodem-src, which tools/Vendoring/DirectoryCopy.cs always normalizes to
+# LF regardless of the submodule's own checked-out line endings (see
+# docs/native-wrapper-spec.md section 6.3a) -- so the patch files themselves must also
+# always check out as LF, or a machine with core.autocrlf=true (Git for Windows'
+# default, including GitHub's windows-latest runners) silently corrupts them into CRLF
+# on checkout and every patch fails to apply.
+patches/**/*.patch text eol=lf
