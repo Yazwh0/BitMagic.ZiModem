@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ZiModem.Net</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Development-time only: copies the native wrapper straight from the CMake build
+      output so ZiModem.Net always runs against whatever was last built by
+      native/CMakeLists.txt, without needing a NuGet runtimes/(rid)/native layout yet
+      (that packaging step is a separate concern, see docs/native-wrapper-spec.md
+      section 9). The Condition means a dotnet build here doesn't hard fail if the
+      native side hasn't been built yet, but ZiModemDevice will throw a
+      DllNotFoundException at run time if it's missing.
+    -->
+    <None Include="$(MSBuildThisFileDirectory)..\..\build\native\bin\zimodem_host.dll"
+          Link="zimodem_host.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\native\bin\zimodem_host.dll')" />
+    <None Include="$(MSBuildThisFileDirectory)..\..\build\native\bin\libzimodem_host.so"
+          Link="libzimodem_host.so"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\native\bin\libzimodem_host.so')" />
+  </ItemGroup>
+
+</Project>

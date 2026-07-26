@@ -1,0 +1,50 @@
+# Ordered list of patches applied to the vendored copy of external/zimodem by
+# tools/vendor.py. One filename per line, applied top to bottom via `git apply`.
+# Blank lines and lines starting with # are ignored.
+#
+# Rules for what belongs here: mechanical portability changes only (new platform
+# branch selection, swapping an ESP-only #include for our compat header of the
+# same name). Never a behavior change. See docs/native-wrapper-spec.md section 6.3.
+
+# Adds a ZIMODEM_HOST_BUILD platform branch to the same #if/#elif ladder that
+# already distinguishes ESP32 from ESP8266, so host builds get their own
+# SerialConfig/debugPrintf/pin definitions instead of silently falling into the
+# ESP8266 branch. Also disables SSH/SD-shell/SLIP/PPP for this build phase via
+# the same INCLUDE_* undef mechanism upstream already uses per-platform.
+0001-add-zimodem-host-platform-branch.patch
+
+# pet2asc.h has its own separate #ifdef ZIMODEM_ESP32/#else ladder (not the one patch
+# 0001 touches in zimodem.ino) whose #else branch assumes ESP8266 and does
+# `#include "ESP8266WiFi.h"` -- unavailable and inappropriate on a host build. Adds a
+# ZIMODEM_HOST branch that aliases HWSerial to our own virtual-UART global instead,
+# mirroring the existing `#define HWSerial Serial` idiom the ESP8266 branch already uses.
+0002-pet2asc-host-serial-alias.patch
+
+# MSVC has no variable-length-array support (a GCC/arduino-esp32-toolchain extension the
+# vendored code relies on in a handful of places) and VLAs aren't standard C++ on any
+# compiler, so they're a genuine cross-platform portability gap, not something a HAL
+# header can paper over. Each site becomes a std::vector-backed heap buffer, with the
+# raw pointer kept under the original variable name so every downstream use of it (array
+# indexing, strcpy/memcpy, passing to functions expecting a pointer) is untouched --
+# purely a storage-location change, not a behavior change. 0005 additionally const_casts
+# one `char *end = strrchr(remotepath, '/')` in proto_ftp.ino's fixPath: remotepath is a
+# `const char*` parameter but the function later writes through `end` (`*end = 0;`) --
+# GCC accepts the implicit const-stripping conversion there, MSVC correctly rejects it as
+# an error. The const_cast makes the existing (already latent) mutation-through-a-const-
+# parameter behavior compile under stricter conformance, without changing what it does.
+0003-zcommand-no-vla.patch
+0004-pet2asc-ino-no-vla.patch
+0005-proto_ftp-no-vla.patch
+0006-zstream-no-vla.patch
+0007-proto_http-no-vla.patch
+0008-zircmode-no-vla.patch
+
+# ZMode declares serialIncoming()/loop() as plain virtual with no definition anywhere
+# (not even in the class body) -- every concrete mode (ZStream, ZCommand, ZPrint, ...)
+# overrides both, and nothing anywhere calls ZMode:: directly, so this is a base class
+# meant to be pure-interface. GCC's linker tolerates the missing base vtable slot;
+# MSVC's doesn't (LNK2001 unresolved external symbol). Marking them `= 0` is the
+# idiomatic, minimal fix -- ZMode was never instantiated directly, so this changes
+# nothing observable, just makes the "must override" intent explicit enough for a
+# stricter linker.
+0009-zmode-pure-virtual.patch

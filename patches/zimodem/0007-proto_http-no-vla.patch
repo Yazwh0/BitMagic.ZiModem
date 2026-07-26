@@ -1,0 +1,12 @@
+--- a/zimodem/proto_http.ino	2026-07-26 15:10:42.195202900 +0100
++++ b/zimodem/proto_http.ino	2026-07-26 15:10:46.781855500 +0100
+@@ -446,7 +446,8 @@
+   && (reUrl.length() > 0)
+   && (reUrl.length() < 1024))
+   {
+-    char newUrlBuf[reUrl.length()+1];
++    std::vector<char> newUrlBuf_storage(reUrl.length()+1);
++    char *newUrlBuf = newUrlBuf_storage.data();
+     strcpy(newUrlBuf,reUrl.c_str());
+     char *hostIp2;
+     char *req2;

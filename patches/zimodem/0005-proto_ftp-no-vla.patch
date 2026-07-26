@@ -1,0 +1,28 @@
+--- a/zimodem/proto_ftp.ino	2026-07-26 15:02:01.646055800 +0100
++++ b/zimodem/proto_ftp.ino	2026-07-26 15:10:18.283297400 +0100
+@@ -53,7 +53,8 @@
+       setCharArray(&path, file);
+     else
+     {
+-      char buf[strlen(file)+2];
++      std::vector<char> buf_storage(strlen(file)+2);
++      char *buf = buf_storage.data();
+       sprintf(buf,"%s/",file);
+       setCharArray(&path, buf);
+     }
+@@ -65,10 +66,12 @@
+ {
+   if(remotepath == 0)
+     return;
+-  char *end = strrchr(remotepath, '/');
++  char *end = const_cast<char *>(strrchr(remotepath, '/'));
+   int buflen = ((path == 0) ? 0 : strlen(path)) + strlen(remotepath) + 3;
+-  char fbuf[buflen];
+-  char pbuf[buflen];
++  std::vector<char> fbuf_storage(buflen);
++  std::vector<char> pbuf_storage(buflen);
++  char *fbuf = fbuf_storage.data();
++  char *pbuf = pbuf_storage.data();
+   if(remotepath[0] == '/')
+   {
+     strcpy(fbuf, remotepath);

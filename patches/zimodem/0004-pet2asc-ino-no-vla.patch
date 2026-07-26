@@ -1,0 +1,12 @@
+--- a/zimodem/pet2asc.ino
++++ b/zimodem/pet2asc.ino
+@@ -187,7 +187,8 @@
+       if(what == TELNET_TERMTYPE)
+       {
+         int respLen = termType.length() + 6;
+-        uint8_t buf[respLen];
++        std::vector<uint8_t> buf_storage(respLen);
++        uint8_t *buf = buf_storage.data();
+         buf[0]=TELNET_IAC;
+         buf[1]=TELNET_SB;
+         buf[2]=TELNET_TERMTYPE;

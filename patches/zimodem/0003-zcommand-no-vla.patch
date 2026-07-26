@@ -1,0 +1,92 @@
+--- a/zimodem/zcommand.ino	2026-07-26 15:00:55.683067800 +0100
++++ b/zimodem/zcommand.ino	2026-07-26 15:01:44.533675900 +0100
+@@ -1771,7 +1771,8 @@
+   else
+   if(isNumber && (vval>0))
+   {
+-    uint8_t buf[vval];
++    std::vector<uint8_t> buf_storage(vval);
++    uint8_t *buf = buf_storage.data();
+     int recvd = HWSerial.readBytes(buf,vval);
+     if(logFileOpen)
+     {
+@@ -1797,7 +1798,8 @@
+   }
+   else
+   {
+-    uint8_t buf[vlen+2];
++    std::vector<uint8_t> buf_storage(vlen+2);
++    uint8_t *buf = buf_storage.data();
+     memcpy(buf,vbuf,vlen);
+     rcvdCrc8=CRC8(buf,vlen);
+     if((crcChk != -1)&&(rcvdCrc8!=crcChk))
+@@ -2770,7 +2772,8 @@
+         }
+       }
+       long vval=0;
+-      uint8_t vbuf[vlen+1];
++      std::vector<uint8_t> vbuf_storage(vlen+1);
++      uint8_t *vbuf = vbuf_storage.data();
+       memset(vbuf,0,vlen+1);
+       if(vlen>0)
+       {
+@@ -3167,7 +3170,8 @@
+           if(vval > 0)
+           {
+             int len = (tempMaskOuts != NULL) ? strlen(tempMaskOuts) : 0;
+-            char newMaskOuts[len+2]; // 1 for the new char, and 1 for the 0 never counted
++            std::vector<char> newMaskOuts_storage(len+2); // 1 for the new char, and 1 for the 0 never counted
++            char *newMaskOuts = newMaskOuts_storage.data();
+             if(len > 0)
+               strcpy(newMaskOuts,tempMaskOuts);
+             newMaskOuts[len] = vval;
+@@ -3176,7 +3180,8 @@
+           }
+           else
+           {
+-            char newMaskOuts[vlen+1];
++            std::vector<char> newMaskOuts_storage(vlen+1);
++            char *newMaskOuts = newMaskOuts_storage.data();
+             newMaskOuts[vlen]=0;
+             if(vlen > 0)
+               memcpy(newMaskOuts,vbuf,vlen);
+@@ -3234,7 +3239,8 @@
+               }
+               if(ok)
+               {
+-                char newStateMachine[vlen+1];
++                std::vector<char> newStateMachine_storage(vlen+1);
++                char *newStateMachine = newStateMachine_storage.data();
+                 newStateMachine[vlen]=0;
+                 if(vlen > 0)
+                   memcpy(newStateMachine,vbuf,vlen);
+@@ -3252,7 +3258,8 @@
+           if(vval > 0)
+           {
+             int len = (tempDelimiters != NULL) ? strlen(tempDelimiters) : 0;
+-            char newDelimiters [len+2]; // 1 for the new char, and 1 for the 0 never counted
++            std::vector<char> newDelimiters_storage(len+2); // 1 for the new char, and 1 for the 0 never counted
++            char *newDelimiters = newDelimiters_storage.data();
+             if(len > 0)
+               strcpy(newDelimiters,tempDelimiters);
+             newDelimiters[len] = vval;
+@@ -3261,7 +3268,8 @@
+           }
+           else
+           {
+-            char newDelimiters[vlen+1];
++            std::vector<char> newDelimiters_storage(vlen+1);
++            char *newDelimiters = newDelimiters_storage.data();
+             newDelimiters[vlen]=0;
+             if(vlen > 0)
+               memcpy(newDelimiters,vbuf,vlen);
+@@ -3285,7 +3293,8 @@
+             {
+               if(numBytes > 128)
+                 numBytes = 128;
+-              byte buf[numBytes];
++              std::vector<byte> buf_storage(numBytes);
++              byte *buf = buf_storage.data();
+               int numRead = logFile.read(buf,numBytes);
+               int i=0;
+               while(i < numRead)

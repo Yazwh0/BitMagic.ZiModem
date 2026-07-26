@@ -1,0 +1,3 @@
+[submodule "external/zimodem"]
+	path = external/zimodem
+	url = https://github.com/bozimmerman/zimodem.git

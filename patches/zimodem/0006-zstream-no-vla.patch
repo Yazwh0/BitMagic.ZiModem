@@ -1,0 +1,12 @@
+--- a/zimodem/zstream.ino
++++ b/zimodem/zstream.ino
+@@ -172,7 +172,8 @@
+ {
+   if(current->isConnected())
+   {
+-    uint8_t escapedBuf[len*2];
++    std::vector<uint8_t> escapedBuf_storage(len*2);
++    uint8_t *escapedBuf = escapedBuf_storage.data();
+     if(isTelnet())
+     {
+       int eDex=0;

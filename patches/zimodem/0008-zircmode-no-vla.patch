@@ -1,0 +1,12 @@
+--- a/zimodem/zircmode.ino	2026-07-26 15:10:42.226814800 +0100
++++ b/zimodem/zircmode.ino	2026-07-26 15:10:51.361411200 +0100
+@@ -112,7 +112,8 @@
+         {
+           serial.printf("%s%sConnecting to %s...%s%s",EOLNC,EOLNC,pb->address,EOLNC,EOLNC);
+           String address = pb->address;
+-          char vbuf[address.length()+1];
++          std::vector<char> vbuf_storage(address.length()+1);
++          char *vbuf = vbuf_storage.data();
+           strcpy(vbuf,pb->address);
+           char *colon=strstr((char *)vbuf,":");
+           int port=6667;

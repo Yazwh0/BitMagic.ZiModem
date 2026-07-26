@@ -1,0 +1,11 @@
+--- a/zimodem/pet2asc.h
++++ b/zimodem/pet2asc.h
+@@ -34,6 +34,8 @@
+ # endif
+   static HardwareSerial HWSerial(MAIN_UART_NUM);
+   static HardwareSerial DBSerial(DEBUG_UART_NUM);
++#elif defined(ZIMODEM_HOST)
++# define HWSerial zimodem_hal_serial
+ #else
+ # include "ESP8266WiFi.h"
+ # define HWSerial Serial

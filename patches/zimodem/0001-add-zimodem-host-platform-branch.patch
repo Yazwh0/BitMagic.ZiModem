@@ -1,0 +1,55 @@
+--- a/zimodem/zimodem.ino	2026-07-26 14:04:05.240095200 +0100
++++ b/zimodem/zimodem.ino	2026-07-26 15:03:45.499248700 +0100
+@@ -52,6 +52,17 @@
+ # define ZIMODEM_ESP32
+ #elif defined(ARDUINO_QUANTUM)
+ # define ZIMODEM_ESP32
++#elif defined(ZIMODEM_HOST_BUILD)
++# define ZIMODEM_HOST
++# undef INCLUDE_SSH
++# undef INCLUDE_SD_SHELL
++# undef INCLUDE_HOSTCM
++# undef INCLUDE_COMET64
++# undef INCLUDE_CBMMODEM
++# undef INCLUDE_SLIP
++# undef INCLUDE_PPP
++# undef INCLUDE_PING
++# undef INCLUDE_OTH_UPDATES
+ #else
+ # define ZIMODEM_ESP8266
+ # undef INCLUDE_SSH
+@@ -161,6 +172,34 @@
+ //# define echoEOLN serial.write
+ //# define HARD_DCD_HIGH 1
+ //# define HARD_DCD_LOW 1
++#elif defined(ZIMODEM_HOST)
++# define DEFAULT_PIN_DSR 5
++# define DEFAULT_PIN_DTR 6
++# define DEFAULT_PIN_RI 7
++# define DEFAULT_PIN_RTS 8
++# define DEFAULT_PIN_CTS 9
++# define DEFAULT_PIN_DCD 10
++# define DEFAULT_PIN_OTH -1 // pulse pin
++# define DEFAULT_FCT FCT_DISABLED
++# define debugPrintf zimodem_hal_debug_printf
++# define SerialConfig uint32_t
++# define UART_CONFIG_MASK 0x8000000
++# define UART_NB_BIT_MASK      0B00001100 | UART_CONFIG_MASK
++# define UART_NB_BIT_5         0B00000000 | UART_CONFIG_MASK
++# define UART_NB_BIT_6         0B00000100 | UART_CONFIG_MASK
++# define UART_NB_BIT_7         0B00001000 | UART_CONFIG_MASK
++# define UART_NB_BIT_8         0B00001100 | UART_CONFIG_MASK
++# define UART_PARITY_MASK      0B00000011
++# define UART_PARITY_NONE      0B00000000
++# define UART_PARITY_EVEN      0B00000010
++# define UART_PARITY_ODD       0B00000011
++# define UART_NB_STOP_BIT_MASK 0B00110000
++# define UART_NB_STOP_BIT_0    0B00000000
++# define UART_NB_STOP_BIT_1    0B00010000
++# define UART_NB_STOP_BIT_15   0B00100000
++# define UART_NB_STOP_BIT_2    0B00110000
++# define preEOLN(...)
++# define echoEOLN(...) serial.prints(EOLN)
+ #else  // ESP-8266, e.g. ESP-01, ESP-12E
+ # define DEFAULT_PIN_DSR 13
+ # define DEFAULT_PIN_DTR 12

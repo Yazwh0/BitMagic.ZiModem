@@ -1,0 +1,13 @@
+--- a/zimodem/zimodem.ino	2026-07-26 16:53:31.782782900 +0100
++++ b/zimodem/zimodem.ino	2026-07-26 16:54:05.574363700 +0100
+@@ -198,8 +198,8 @@
+ class ZMode
+ {
+   public:
+-    virtual void serialIncoming();
+-    virtual void loop();
++    virtual void serialIncoming() = 0;
++    virtual void loop() = 0;
+ };
+ 
+ #include "pet2asc.h"
