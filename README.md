@@ -69,9 +69,10 @@ since the two platforms' CMake caches can't share one directory).
 ctest --test-dir build/native --output-on-failure
 ```
 
-80 tests as of this writing, covering the HAL in isolation, the vendored firmware
-driven directly, and the C ABI's full lifecycle (including a real TCP dial and
-bidirectional data passthrough).
+87 test cases (263 assertions) as of this writing, covering the HAL in isolation, the
+vendored firmware driven directly (including protocol-level behavior: `+++`/`ATH`,
+phonebook persistence, HTTP/IRC round trips), and the C ABI's full lifecycle (including
+a real TCP dial and bidirectional data passthrough).
 
 ### Building the managed side
 
@@ -104,6 +105,14 @@ directory. Useful flags:
   temp directory every run.
 - `--log` / `-v` / `--verbose` — also prints the firmware's own debug log lines (off by
   default; noisy).
+
+## CI
+
+`.gitlab-ci.yml` builds and tests both platforms on every push (`build:linux` +
+`test:linux` on `ubuntu:22.04`, `build:windows` + `test:windows` on a
+`saas-windows-medium-amd64` runner). Pushing a tag additionally packages each
+platform's `build/*/bin/` output and publishes it as an asset on a GitLab Release for
+that tag.
 
 ## Updating the vendored firmware
 

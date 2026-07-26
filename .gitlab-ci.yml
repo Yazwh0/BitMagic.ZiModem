@@ -1,0 +1,174 @@
+# Builds and tests the native wrapper on both Windows and Linux, then, for tagged
+# commits, packages each platform's build output and publishes them as assets on a
+# GitLab Release. See docs/native-wrapper-spec.md section 10-11 for what "the build"
+# actually is on each platform, and README.md for the equivalent by-hand commands this
+# pipeline automates.
+#
+# Assumptions this file makes about the runner fleet (adjust if yours differs):
+# - Linux jobs use the Docker executor with a plain `ubuntu:22.04` image.
+# - Windows jobs run on a `saas-windows-medium-amd64` runner (GitLab.com's shared
+#   Windows runner) using its default shell (PowerShell) executor. Visual Studio Build
+#   Tools are expected to already be present on that image; CMake and the .NET SDK are
+#   installed on demand via Chocolatey if missing, so the job works even if the image
+#   changes what it ships with.
+
+stages:
+  - build
+  - test
+  - package
+  - release
+
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+
+# ---------------------------------------------------------------------------
+# Linux (x64, GCC)
+# ---------------------------------------------------------------------------
+
+build:linux:
+  stage: build
+  image: ubuntu:22.04
+  before_script:
+    - apt-get update -qq
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends cmake build-essential git ca-certificates dotnet-sdk-8.0
+  script:
+    - set -e
+    - cmake -S native -B build/native
+    - cmake --build build/native -j"$(nproc)"
+  artifacts:
+    name: "zimodem-host-linux-x64-build"
+    paths:
+      - build/native/bin/
+    expire_in: 1 week
+
+test:linux:
+  stage: test
+  image: ubuntu:22.04
+  needs: ["build:linux"]
+  script:
+    - set -e
+    - export LD_LIBRARY_PATH="$CI_PROJECT_DIR/build/native/bin:$LD_LIBRARY_PATH"
+    - ./build/native/bin/zimodem_hal_tests
+    - ./build/native/bin/zimodem_core_tests
+    - ./build/native/bin/zimodem_host_tests
+
+# ---------------------------------------------------------------------------
+# Windows (x64, MSVC)
+# ---------------------------------------------------------------------------
+
+build:windows:
+  stage: build
+  tags:
+    - saas-windows-medium-amd64
+  before_script:
+    - |
+      if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
+        choco install -y cmake --installargs 'ADD_CMAKE_TO_PATH=System'
+      }
+      if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+        choco install -y dotnet-8.0-sdk
+      }
+      Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+      refreshenv
+    - |
+      # Locate whatever Visual Studio version the runner image actually has (never
+      # hardcode a version/edition path here -- it varies by runner image).
+      $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+      $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+      $vcvars = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"
+      cmd /c "`"$vcvars`" && set" | ForEach-Object {
+        if ($_ -match '^([^=]+)=(.*)$') {
+          Set-Item -Path "env:$($matches[1])" -Value $matches[2]
+        }
+      }
+  script:
+    - cmake -S native -B build/native -G Ninja
+    - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - cmake --build build/native -j
+    - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  artifacts:
+    name: "zimodem-host-win-x64-build"
+    paths:
+      - build/native/bin/
+    expire_in: 1 week
+
+test:windows:
+  stage: test
+  tags:
+    - saas-windows-medium-amd64
+  needs: ["build:windows"]
+  script:
+    - .\build\native\bin\zimodem_hal_tests.exe
+    - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - .\build\native\bin\zimodem_core_tests.exe
+    - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - .\build\native\bin\zimodem_host_tests.exe
+    - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+# ---------------------------------------------------------------------------
+# Packaging + GitLab Release (tagged commits only)
+# ---------------------------------------------------------------------------
+
+package:linux:
+  stage: package
+  image: ubuntu:22.04
+  needs: ["build:linux", "test:linux"]
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  before_script:
+    - apt-get update -qq
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends curl ca-certificates
+  script:
+    - set -e
+    - tar -C build/native/bin -czf "zimodem-host-linux-x64-${CI_COMMIT_TAG}.tar.gz" .
+    - >
+      curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "zimodem-host-linux-x64-${CI_COMMIT_TAG}.tar.gz"
+      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/zimodem-host/${CI_COMMIT_TAG}/zimodem-host-linux-x64-${CI_COMMIT_TAG}.tar.gz"
+  artifacts:
+    name: "zimodem-host-linux-x64-${CI_COMMIT_TAG}"
+    paths:
+      - "zimodem-host-linux-x64-${CI_COMMIT_TAG}.tar.gz"
+    expire_in: never
+
+package:windows:
+  stage: package
+  tags:
+    - saas-windows-medium-amd64
+  needs: ["build:windows", "test:windows"]
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  script:
+    # PowerShell reads CI/CD variables from the environment ($env:NAME), never as bare
+    # PowerShell variables ($NAME) -- unlike the bash jobs above, where $NAME already
+    # works because bash's own variable syntax matches GitLab's.
+    - Compress-Archive -Path build\native\bin\* -DestinationPath "zimodem-host-win-x64-$env:CI_COMMIT_TAG.zip"
+    - >
+      curl.exe --fail --header "JOB-TOKEN: $env:CI_JOB_TOKEN" --upload-file "zimodem-host-win-x64-$env:CI_COMMIT_TAG.zip"
+      "$env:CI_API_V4_URL/projects/$env:CI_PROJECT_ID/packages/generic/zimodem-host/$env:CI_COMMIT_TAG/zimodem-host-win-x64-$env:CI_COMMIT_TAG.zip"
+    - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  artifacts:
+    name: "zimodem-host-win-x64-${CI_COMMIT_TAG}"
+    paths:
+      - "zimodem-host-win-x64-$CI_COMMIT_TAG.zip"
+    expire_in: never
+
+release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs: ["package:linux", "package:windows"]
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  script:
+    - echo "Publishing release $CI_COMMIT_TAG"
+  release:
+    tag_name: '$CI_COMMIT_TAG'
+    name: 'ZiModem host $CI_COMMIT_TAG'
+    description: 'Native zimodem_host builds for Windows x64 and Linux x64. See README.md for what each archive contains.'
+    assets:
+      links:
+        - name: 'zimodem-host-linux-x64.tar.gz'
+          url: '${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/zimodem-host/${CI_COMMIT_TAG}/zimodem-host-linux-x64-${CI_COMMIT_TAG}.tar.gz'
+        - name: 'zimodem-host-win-x64.zip'
+          url: '${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/zimodem-host/${CI_COMMIT_TAG}/zimodem-host-win-x64-${CI_COMMIT_TAG}.zip'

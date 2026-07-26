@@ -608,8 +608,8 @@ Actual design (revised twice from the original sketch based on real testing feed
 
 ## 11. Testing Strategy
 
-**80 tests total, passing on both Windows (MSVC) and Linux (GCC, via WSL) as of this
-writing.**
+**87 test cases (263 assertions) total, passing identically on both Windows (MSVC) and
+Linux (GCC, via WSL) as of this writing.**
 
 ### 11.1 HAL unit tests (`native/hal/tests`, Catch2, no zimodem code involved) — 73 tests, done
 
@@ -632,20 +632,46 @@ exact multi-byte count. Fixed with `FIONREAD`/`ioctlsocket`.
 - Bidirectional data passthrough after `CONNECT` (this is the test that caught the
   `TcpSocket::available()` bug above).
 
-**`test_c_abi.cpp` (drives the C ABI, 3 tests, done):** singleton enforcement, full
-`create → set_callbacks → start → AT round trip → destroy` lifecycle, `ATDT` dial with
-DCD verified via the signal callback.
+**`test_c_abi.cpp` (drives the C ABI, 4 tests, done):** `data_dir` required (rejects
+null/empty), singleton enforcement, full `create → set_callbacks → start → AT round
+trip → destroy` lifecycle, `ATDT` dial with DCD verified via the signal callback.
+
+**`test_protocol.cpp` (drives `zimodem_core` directly, 6 tests, done):**
+- An unrecognized command (`AT%A`, a permanently-disabled command) returns `ERROR`.
+- `+++` escapes to command mode without hanging up (real ~900ms guard-time silence on
+  both sides, not simulated), then `ATH` hangs up and the socket actually closes.
+- Phonebook entry survives a simulated restart (`setup()` called again against the same
+  data dir) — written via the IRC add-menu, not `ATP`, see below.
+- `AT&G` fetches a real HTTP URL against a fake server and validates the
+  `[ 0 <size> <checksum> ]` header format plus body.
+- `AT+irc` walks the phonebook-based connect menu and joins a channel over a real fake
+  IRC server (registration handshake, `/join`, the lot).
+- `AT&G` over `ftp://` — documents a confirmed upstream bug rather than testing a
+  working fetch (see below).
+
+**Two more confirmed upstream defects found while writing these tests** (same category
+as the IRC-echo bug already on file — left unpatched by choice, not silently fixed):
+- `ATP<num>=<mods>:<addr>,<notes>` (`ZCommand::doPhonebookCommand`) always returns
+  `ERROR` for a real host:port address: after splitting `<mods>:<addr>` at the first
+  `:`, it validates the address with `PhoneBookEntry::checkPhonebookEntry()`, which
+  requires an all-digits string — any address with a dot or a port colon fails. The
+  phonebook persistence test above writes its entry through the IRC menu's own
+  "[ADD] new phonebook entry" flow instead, which builds the `PhoneBookEntry` directly
+  and has no such bug.
+- `AT&G` over `ftp://` always returns `ERROR`, unconditionally: `doWebStream()` parses
+  the URL via `FTPHost::parseUrl()`, which mutates the argument buffer in place, then
+  *unconditionally* calls `parseWebUrl()` a second time on that same now-mutated
+  buffer — a call meant only to matter for the http/gopher branches. Because
+  `parseWebUrl()` doesn't recognize an `ftp:` prefix and the buffer's first embedded
+  null now leaves just `"ftp:"` visible from the start, that second call tries to parse
+  `"ftp"` as a hostname with an empty port and fails, well before any socket opens.
 
 **Not yet covered** (code compiles and works per manual console-app testing, but has no
 automated assertions):
-- HTTP/FTP client, IRC mode.
-- `+++` escape sequence (timing-sensitive — `zimodem_hal::serial_port` has no
-  inter-byte timing model yet, so this needs a dedicated test design, not just more
-  assertions).
-- `ATH` hangup, error responses, phonebook persistence round-trip across a data-dir
-  reload.
 - Everything in §7.7 (SD-shell, SSH, SLIP/PPP) can't be tested since it isn't compiled
   in yet.
+- Golden request/response fixtures ported from upstream's `test.py` transcripts (see
+  below) — not started.
 
 Upstream ships `external/zimodem/test.py`, a pyserial-driven interactive/AT-command
 test harness. Not reused as-is (targets a real serial device + keyboard interaction),
@@ -661,13 +687,17 @@ dispose safety, an end-to-end smoke test through the full managed stack. Current
 `ZiModem.Net` has only been exercised manually through `tools/ZiModem.Console`, on both
 Windows and Linux.
 
-### 11.4 CI matrix — not started
+### 11.4 CI matrix — automated via GitLab CI
 
-Windows-x64 + Linux-x64 both build and pass all 80 tests today (manually verified via
-a VS Developer Command Prompt and WSL/Ubuntu respectively), but this isn't automated
-anywhere yet (no GitHub Actions or equivalent). That's the remaining gap between "we've
-proven this works on both platforms" and "a regression on either platform is caught
-automatically."
+`.gitlab-ci.yml` (repo root) builds and tests both platforms on every push: `build:linux`
+(`ubuntu:22.04`, GCC) and `build:windows` (`saas-windows-medium-amd64`, MSVC located via
+`vswhere` — never a hardcoded VS path, since the runner image's VS version isn't
+something this repo controls), each followed by a `test:*` job that runs all three
+native test binaries directly (not `ctest`, so the artifact only needs to carry
+`build/*/bin/`, not the whole CMake build tree). On a tagged commit, `package:linux` /
+`package:windows` archive each platform's `bin/` output, upload it to the project's
+generic package registry, and a `release` job (GitLab's `release-cli`) publishes both
+as assets on a GitLab Release named after the tag.
 
 ## 12. Open Decisions & Risks
 
