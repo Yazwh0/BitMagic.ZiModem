@@ -10,11 +10,22 @@ internal static class NativeMethods
 {
     private const string LibName = "zimodem_host";
 
+    // Runs once, before any P/Invoke below can be reached (static constructors run
+    // lazily on first use of the type, guaranteed before any of NativeMethods' own
+    // static members are touched) -- see NativeLibraryResolver for why this exists
+    // instead of relying on the OS loader's default search.
+    static NativeMethods()
+    {
+        NativeLibraryResolver.EnsureRegistered();
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     internal struct ZimodemHostConfig
     {
+        // Required -- zimodem_host_create() fails without one (see zimodem_host.h and
+        // ZiModemDevice's constructor).
         [MarshalAs(UnmanagedType.LPStr)]
-        public string? DataDir;
+        public string DataDir;
     }
 
     // IntPtr (not `string`) for the message parameter: the callback fires on the native

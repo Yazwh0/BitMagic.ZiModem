@@ -8,24 +8,46 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <!--
+    Native assets are laid out under runtimes/<rid>/native/, the same convention a real
+    NuGet package with native content uses (Pack="true" PackagePath="runtimes/.../native/"
+    below is exactly what `dotnet pack` needs), and NativeLibraryResolver.cs picks the
+    right one at load time based on the running OS. This is deliberately NOT a flat,
+    single-shared-folder copy: that was tried first and broke in practice (see the
+    resolver's own comment) the first time both a Windows and a Linux build of
+    zimodem_host existed on the same machine at once, which is routine under WSL, since
+    Windows and Linux share one physical filesystem there. Whichever platform's binary
+    got copied last silently overwrote the other's. Separate runtimes/<rid>/native/
+    subfolders mean both coexist on disk, which is also the exact groundwork a CI
+    pipeline building both platforms needs before it can assemble one NuGet package from
+    both jobs' output.
+
+    Each source path is Condition-guarded so `dotnet build` here never hard fails just
+    because one platform hasn't been built locally yet; NativeLibraryResolver throws a
+    clear DllNotFoundException at run time instead if the one needed is missing.
+    Two candidate source paths per platform: build/native/bin (a single build directory
+    targeting just that OS, e.g. a dedicated CI runner) and build/native-linux/bin (this
+    repo's local convention for keeping a Linux build alongside a Windows one on the same
+    machine, e.g. under WSL; see docs/native-wrapper-spec.md section 10).
+  -->
   <ItemGroup>
-    <!--
-      Development-time only: copies the native wrapper straight from the CMake build
-      output so ZiModem.Net always runs against whatever was last built by
-      native/CMakeLists.txt, without needing a NuGet runtimes/(rid)/native layout yet
-      (that packaging step is a separate concern, see docs/native-wrapper-spec.md
-      section 9). The Condition means a dotnet build here doesn't hard fail if the
-      native side hasn't been built yet, but ZiModemDevice will throw a
-      DllNotFoundException at run time if it's missing.
-    -->
     <None Include="$(MSBuildThisFileDirectory)..\..\build\native\bin\zimodem_host.dll"
-          Link="zimodem_host.dll"
-          CopyToOutputDirectory="PreserveNewest"
-          Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\native\bin\zimodem_host.dll')" />
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\native\bin\zimodem_host.dll')"
+          Pack="true" PackagePath="runtimes/win-x64/native/zimodem_host.dll"
+          Link="runtimes/win-x64/native/zimodem_host.dll"
+          CopyToOutputDirectory="PreserveNewest" />
+
     <None Include="$(MSBuildThisFileDirectory)..\..\build\native\bin\libzimodem_host.so"
-          Link="libzimodem_host.so"
-          CopyToOutputDirectory="PreserveNewest"
-          Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\native\bin\libzimodem_host.so')" />
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\native\bin\libzimodem_host.so')"
+          Pack="true" PackagePath="runtimes/linux-x64/native/libzimodem_host.so"
+          Link="runtimes/linux-x64/native/libzimodem_host.so"
+          CopyToOutputDirectory="PreserveNewest" />
+
+    <None Include="$(MSBuildThisFileDirectory)..\..\build\native-linux\bin\libzimodem_host.so"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\native-linux\bin\libzimodem_host.so')"
+          Pack="true" PackagePath="runtimes/linux-x64/native/libzimodem_host.so"
+          Link="runtimes/linux-x64/native/libzimodem_host.so"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

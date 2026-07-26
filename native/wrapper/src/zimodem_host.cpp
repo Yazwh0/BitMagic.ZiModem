@@ -93,12 +93,16 @@ namespace
 
 zimodem_handle zimodem_host_create(const zimodem_host_config* cfg)
 {
+    // A library has no business silently choosing a filesystem location on the
+    // caller's behalf -- see zimodem_host.h's comment on zimodem_host_config::data_dir.
+    if (cfg == nullptr || cfg->data_dir == nullptr || cfg->data_dir[0] == '\0')
+        return nullptr;
+
     std::lock_guard<std::mutex> lock(g_singleton_mutex);
     if (g_active_instance != nullptr)
         return nullptr;
 
-    if (cfg != nullptr && cfg->data_dir != nullptr)
-        zimodem_hal::fs::set_root(cfg->data_dir);
+    zimodem_hal::fs::set_root(cfg->data_dir);
 
     zimodem_hal::net::global_init();
 

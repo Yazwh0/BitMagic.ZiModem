@@ -80,9 +80,11 @@ dotnet build managed/ZiModem.Net/ZiModem.Net.csproj
 dotnet build tools/ZiModem.Console/ZiModem.Console.csproj
 ```
 
-`ZiModem.Net.csproj` copies the native binary from the CMake build output directory
-automatically (a dev-time convenience — see the spec §9 for the NuGet packaging that's
-still open).
+`ZiModem.Net.csproj` copies each platform's native binary from the CMake build output
+into its own `runtimes/<rid>/native/` folder automatically, and picks the right one at
+run time based on the OS you're actually running on — so a machine with both a Windows
+and a Linux build present (e.g. this repo under WSL) works correctly either way. Actual
+NuGet package publishing is still open (spec §12).
 
 ## Trying it out: the test console
 

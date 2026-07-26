@@ -17,7 +17,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
+#include <filesystem>
 #include <mutex>
+#include <random>
+#include <sstream>
 #include <string>
 #include <thread>
 
@@ -103,11 +106,34 @@ namespace
     {
         zimodem_host_write_serial(h, reinterpret_cast<const uint8_t*>(s.data()), s.size());
     }
+
+    // zimodem_host_config::data_dir is required -- zimodem_host_create() fails without
+    // one (see zimodem_host.h). Tests are exactly the "throwaway directory" case that
+    // comment describes: compute one explicitly here, same as any other caller would.
+    std::string make_temp_dir_path()
+    {
+        std::random_device rd;
+        std::ostringstream name;
+        name << "zimodem-c-abi-test-" << rd();
+        return (std::filesystem::temp_directory_path() / name.str()).string();
+    }
+}
+
+TEST_CASE("zimodem_host_create requires a data_dir -- a library shouldn't pick a filesystem location for you", "[c_abi]")
+{
+    REQUIRE(zimodem_host_create(nullptr) == nullptr);
+
+    zimodem_host_config nullDir{nullptr};
+    REQUIRE(zimodem_host_create(&nullDir) == nullptr);
+
+    zimodem_host_config emptyDir{""};
+    REQUIRE(zimodem_host_create(&emptyDir) == nullptr);
 }
 
 TEST_CASE("only one zimodem_handle can exist per process", "[c_abi]")
 {
-    zimodem_host_config cfg{nullptr};
+    std::string tempDir = make_temp_dir_path();
+    zimodem_host_config cfg{tempDir.c_str()};
     HandleGuard first(zimodem_host_create(&cfg));
     REQUIRE(first.h != nullptr);
 
@@ -118,7 +144,8 @@ TEST_CASE("only one zimodem_handle can exist per process", "[c_abi]")
 TEST_CASE("create -> set_callbacks -> start -> AT command round trip -> destroy", "[c_abi]")
 {
     Harness harness;
-    zimodem_host_config cfg{nullptr};
+    std::string tempDir = make_temp_dir_path();
+    zimodem_host_config cfg{tempDir.c_str()};
     HandleGuard guard(zimodem_host_create(&cfg));
     REQUIRE(guard.h != nullptr);
 
@@ -136,7 +163,8 @@ TEST_CASE("create -> set_callbacks -> start -> AT command round trip -> destroy"
 TEST_CASE("ATDT dial through the C ABI asserts DCD via the signal callback", "[c_abi]")
 {
     Harness harness;
-    zimodem_host_config cfg{nullptr};
+    std::string tempDir = make_temp_dir_path();
+    zimodem_host_config cfg{tempDir.c_str()};
     HandleGuard guard(zimodem_host_create(&cfg));
     REQUIRE(guard.h != nullptr);
     zimodem_host_set_callbacks(guard.h, Harness::onSerialOut, Harness::onSignal, Harness::onLog, &harness);

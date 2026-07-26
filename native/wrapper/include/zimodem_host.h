@@ -40,9 +40,12 @@ typedef struct zimodem_instance* zimodem_handle;
 typedef struct zimodem_host_config
 {
     // Host directory the emulated SPIFFS filesystem (config, phonebook, logs) is rooted
-    // under. Pass NULL to use a fresh OS temp directory -- fine for tests/throwaway runs,
-    // but a real application should pass a stable path so config/phonebook persist
-    // across restarts.
+    // under. Required: non-NULL, non-empty. zimodem_host_create() fails (returns NULL)
+    // if this is missing -- a library has no business silently picking a filesystem
+    // location on the caller's behalf (e.g. an OS temp directory, which would also mean
+    // config/phonebook silently fail to persist across restarts). The caller decides
+    // where their data lives; if you want a throwaway directory, compute one yourself
+    // (e.g. an OS temp path) and pass it explicitly.
     const char* data_dir;
 } zimodem_host_config;
 
@@ -55,8 +58,8 @@ typedef void (*zimodem_signal_cb)(void* user_context, int pin, int active);
 typedef void (*zimodem_log_cb)(void* user_context, const char* message);
 
 // Allocates an instance and configures the data directory. Does not start the background
-// thread. Returns NULL if an instance already exists in this process (see the note
-// above) or if allocation fails.
+// thread. Returns NULL if cfg is NULL or cfg->data_dir is NULL/empty, if an instance
+// already exists in this process (see the note above), or if allocation fails.
 ZIMODEM_API zimodem_handle zimodem_host_create(const zimodem_host_config* cfg);
 
 // Registers callbacks, replacing any previously registered ones. Call this before

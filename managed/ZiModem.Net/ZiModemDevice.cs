@@ -44,12 +44,16 @@ public sealed class ZiModemDevice : IDisposable
 
     /// <param name="dataDir">
     /// Host directory the emulated SPIFFS filesystem (config, phonebook, logs) is rooted
-    /// under. Defaults to a fresh temp directory if omitted -- fine for a quick session,
-    /// but pass a stable path if you want config/phonebook to persist across runs.
+    /// under. Required: a library has no business silently picking a filesystem location
+    /// on your behalf (an earlier version of this constructor defaulted to a fresh OS
+    /// temp directory when omitted -- removed deliberately; that meant config/phonebook
+    /// silently failed to persist across runs unless you happened to know to pass a
+    /// path). If you want a throwaway directory, compute one yourself and pass it
+    /// explicitly, e.g. <c>Path.Combine(Path.GetTempPath(), "zimodem-" + Guid.NewGuid())</c>.
     /// </param>
-    public ZiModemDevice(string? dataDir = null)
+    public ZiModemDevice(string dataDir)
     {
-        dataDir ??= Path.Combine(Path.GetTempPath(), "zimodem-net-" + Guid.NewGuid().ToString("N"));
+        ArgumentException.ThrowIfNullOrEmpty(dataDir);
         Directory.CreateDirectory(dataDir);
 
         var cfg = new NativeMethods.ZimodemHostConfig { DataDir = dataDir };

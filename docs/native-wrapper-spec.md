@@ -480,6 +480,15 @@ while actually implementing it:
   than behave independently. This mirrors real hardware (there is only ever one modem)
   rather than being an arbitrary limitation to lift later — see `zimodem_host.h`'s own
   header comment for the full rationale.
+- **`data_dir` is required, not optional.** An earlier version let `data_dir` be `NULL`
+  and silently created a fresh OS temp directory. Removed deliberately: a library
+  choosing a filesystem location on the caller's behalf is a footgun (config/phonebook
+  silently fail to persist across restarts unless the caller happens to know to pass a
+  path), and it's exactly the kind of implicit behavior this project otherwise avoids.
+  `zimodem_host_create()` now fails (`NULL`) if `cfg` is `NULL` or `data_dir` is
+  `NULL`/empty. Callers that genuinely want a throwaway directory compute one themselves
+  and pass it explicitly — the choice stays visible at the call site instead of being
+  buried in the library.
 
 Design rules: no `std::string`/`std::vector` in the signature, no exceptions crossing
 the boundary (every C++ exception from vendored/HAL code is caught inside the
@@ -491,8 +500,9 @@ queue push, consumed by the background thread's next `loop()` iteration).
 
 - `NativeMethods` (internal): raw P/Invoke declarations, one-to-one with the C ABI.
 - Public `ZiModemDevice : IDisposable` (`managed/ZiModem.Net/ZiModemDevice.cs`), exposing:
-  - `ZiModemDevice(string? dataDir = null)` — creates the native instance; throws if
-    one already exists in the process (§8's singleton constraint).
+  - `ZiModemDevice(string dataDir)` — creates the native instance; `dataDir` is
+    required (§8 — no silent temp-directory fallback); throws if one already exists in
+    the process (§8's singleton constraint).
   - `void Start()`
   - `void WriteSerial(ReadOnlySpan<byte> data)`
   - `event EventHandler<SerialDataEventArgs> SerialDataReceived;`
@@ -504,10 +514,22 @@ queue push, consumed by the background thread's next `loop()` iteration).
   sketched here: correct and simple for every consumer built so far, but a caller
   needing UI-thread affinity must marshal there itself. Documented in the class's XML
   remarks.
-- Not yet packaged as a NuGet package with `runtimes/<rid>/native` assets — currently
-  `ZiModem.Net.csproj` copies `zimodem_host.dll`/`libzimodem_host.so` straight from the
-  CMake build output directory for local-dev convenience. Proper per-RID packaging is
-  open work (§12).
+- **RID-aware native asset resolution**, done: `ZiModem.Net.csproj` copies each
+  platform's native binary into its own `runtimes/<rid>/native/` subfolder of the build
+  output (`win-x64`/`linux-x64`), and `NativeLibraryResolver.cs` registers a custom
+  `DllImportResolver` that loads the one matching the running OS. This replaced an
+  earlier flat-copy design ("put whichever binary exists straight in the output
+  folder") that broke in practice: under WSL, Windows and Linux share one physical
+  filesystem, so a Windows build and a Linux build of `zimodem_host` sitting in the
+  *same* shared output folder meant whichever one was copied there most recently
+  silently clobbered the other — discovered when manually copying the Linux `.so` in
+  for a WSL test run deleted the Windows `.dll` a `dotnet run` moments later needed.
+  Separate `runtimes/<rid>/native/` subfolders let both coexist on disk at once
+  (verified: both binaries present simultaneously, each platform's build correctly
+  loading its own), which is also exactly the layout `Pack="true"`/`PackagePath`
+  already sets up for a real `dotnet pack` later (§12 still tracks the remaining
+  packaging work — publishing an actual NuGet package — but the resolution mechanism
+  itself is done).
 
 ### 9.1 Manual test console (`tools/ZiModem.Console`)
 
@@ -577,8 +599,12 @@ Actual design (revised twice from the original sketch based on real testing feed
   `ioctlsocket`/`FIONREAD` vs `ioctl`/`FIONREAD`) turned out small enough to keep as
   `#ifdef _WIN32` blocks within shared files rather than splitting into parallel
   directory trees.
-- `managed/ZiModem.Net.csproj` copies the native binary from the CMake build output
-  directory for local dev (see §9); NuGet RID packaging is open work.
+- `managed/ZiModem.Net.csproj` copies each platform's native binary from its CMake
+  build output directory into `runtimes/<rid>/native/` (see §9) — checks both
+  `build/native/bin` (a single-OS build directory, e.g. a dedicated CI runner) and
+  `build/native-linux/bin` (this repo's local convention for a Linux build living
+  alongside a Windows one on the same machine) as candidate sources for the Linux
+  binary specifically, so either layout works without changes.
 
 ## 11. Testing Strategy
 
@@ -667,10 +693,10 @@ automatically."
    assumption about the producer/consumer) hasn't been stress-tested against an actual
    real-port backend design, so "is this genuinely sufficient groundwork" remains
    somewhat open in the abstract, but hasn't blocked anything built so far.
-5. **NuGet packaging.** `ZiModem.Net` needs real `runtimes/win-x64/native/
-   zimodem_host.dll` + `runtimes/linux-x64/native/libzimodem_host.so` packaging instead
-   of the current dev-convenience copy-from-build-output. Both binaries now genuinely
-   exist and are tested (§10), so this is purely packaging work, not blocked on
-   anything technical.
+5. **NuGet packaging.** The RID-aware resolution mechanism itself is done (§9,
+   `NativeLibraryResolver.cs`) — both `runtimes/win-x64/native/zimodem_host.dll` and
+   `runtimes/linux-x64/native/libzimodem_host.so` are laid out correctly and coexist on
+   disk. What's left is purely packaging: an actual `dotnet pack` + publish step, not
+   blocked on anything technical.
 6. **CI automation.** §11.4 — the Windows+Linux matrix is proven to work by hand;
    wiring it into an actual CI pipeline is open.
