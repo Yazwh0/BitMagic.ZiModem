@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -31,23 +31,14 @@
     machine, e.g. under WSL; see docs/native-wrapper-spec.md section 10).
   -->
   <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)..\..\build\native\bin\zimodem_host.dll"
-          Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\native\bin\zimodem_host.dll')"
-          Pack="true" PackagePath="runtimes/win-x64/native/zimodem_host.dll"
-          Link="runtimes/win-x64/native/zimodem_host.dll"
-          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(MSBuildThisFileDirectory)..\..\build\native\bin\zimodem_host.dll" Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\native\bin\zimodem_host.dll')" Pack="true" PackagePath="runtimes/win-x64/native/zimodem_host.dll" Link="runtimes/win-x64/native/zimodem_host.dll" CopyToOutputDirectory="PreserveNewest" />
 
-    <None Include="$(MSBuildThisFileDirectory)..\..\build\native\bin\libzimodem_host.so"
-          Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\native\bin\libzimodem_host.so')"
-          Pack="true" PackagePath="runtimes/linux-x64/native/libzimodem_host.so"
-          Link="runtimes/linux-x64/native/libzimodem_host.so"
-          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(MSBuildThisFileDirectory)..\..\build\native\bin\libzimodem_host.so" Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\native\bin\libzimodem_host.so')" Pack="true" PackagePath="runtimes/linux-x64/native/libzimodem_host.so" Link="runtimes/linux-x64/native/libzimodem_host.so" CopyToOutputDirectory="PreserveNewest" />
 
-    <None Include="$(MSBuildThisFileDirectory)..\..\build\native-linux\bin\libzimodem_host.so"
-          Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\native-linux\bin\libzimodem_host.so')"
-          Pack="true" PackagePath="runtimes/linux-x64/native/libzimodem_host.so"
-          Link="runtimes/linux-x64/native/libzimodem_host.so"
-          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(MSBuildThisFileDirectory)..\..\build\native-linux\bin\libzimodem_host.so" Condition="Exists('$(MSBuildThisFileDirectory)..\..\build\native-linux\bin\libzimodem_host.so')" Pack="true" PackagePath="runtimes/linux-x64/native/libzimodem_host.so" Link="runtimes/linux-x64/native/libzimodem_host.so" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\native\ZiModemHost.vcxproj" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>MakeFileProj</Keyword>
+    <ProjectGuid>{7E3EFF57-92D4-4994-8681-7D99B3F5A5A1}</ProjectGuid>
+    <RootNamespace>ZiModemHost</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>ZiModemHost</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="Shared" />
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <!-- cmake/ninja aren't on PATH for a plain build (they're bundled inside Visual Studio's own
+         install tree, only added to PATH by VsDevCmd.bat, which a normal MSBuild/IDE build doesn't
+         run). Locate them via vswhere.exe, the standard version-independent way to find
+         VS-bundled components, and prepend them to PATH before invoking cmake. -->
+    <ZiModemFindVsTools>for /f "usebackq tokens=*" %%i in (`"%25ProgramFiles(x86)%25\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath`) do set "VSINSTALLDIR=%%i"
+set "PATH=%25VSINSTALLDIR%25\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;%25VSINSTALLDIR%25\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja;%25PATH%25"</ZiModemFindVsTools>
+    <!-- Mirrors .github/workflows/ci.yml: a single-config Ninja build with no CMAKE_BUILD_TYPE
+         set (see docs/native-wrapper-spec.md section 10), so Debug and Release both configure/build
+         the same build/native directory. Vendoring + patching runs automatically as part of the
+         CMake build (the zimodem_vendor ALL target in CMakeLists.txt) so no separate step is needed here. -->
+    <NMakeBuildCommandLine>$(ZiModemFindVsTools)
+cmake -S "$(ProjectDir)." -B "$(ProjectDir)..\build\native" -G Ninja &amp;&amp; cmake --build "$(ProjectDir)..\build\native" --target zimodem_host</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>$(ZiModemFindVsTools)
+cmake --build "$(ProjectDir)..\build\native" --target clean &amp; cmake -S "$(ProjectDir)." -B "$(ProjectDir)..\build\native" -G Ninja &amp;&amp; cmake --build "$(ProjectDir)..\build\native" --target zimodem_host</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>$(ZiModemFindVsTools)
+cmake --build "$(ProjectDir)..\build\native" --target clean</NMakeCleanCommandLine>
+    <NMakeOutput>$(ProjectDir)..\build\native\bin\zimodem_host.dll</NMakeOutput>
+    <NMakeIncludeSearchPath>$(ProjectDir)wrapper\include;$(ProjectDir)hal\include</NMakeIncludeSearchPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <ClInclude Include="hal\include\**\*.h" />
+    <ClInclude Include="wrapper\include\**\*.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="hal\src\**\*.cpp" />
+    <ClCompile Include="wrapper\src\**\*.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="CMakeLists.txt" />
+    <None Include="hal\CMakeLists.txt" />
+    <None Include="wrapper\CMakeLists.txt" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>

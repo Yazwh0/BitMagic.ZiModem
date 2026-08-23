@@ -26,15 +26,35 @@ get_filename_component(ZIMODEM_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLU
 option(ZIMODEM_BUILD_TESTS "Build the HAL/wrapper unit test suites" ON)
 
 # --- Vendoring -----------------------------------------------------------
-# Regenerates build/vendor/zimodem-src from external/zimodem + patches/zimodem on every
-# build. See docs/native-wrapper-spec.md section 6. This is deliberately ALL (always
-# runs), not a one-time configure step, so editing a patch and rebuilding picks it up.
-add_custom_target(zimodem_vendor ALL
+# Regenerates build/vendor/zimodem-src from external/zimodem + patches/zimodem, but only
+# when one of those inputs actually changed. See docs/native-wrapper-spec.md section 6.
+# Dependency-tracked via a stamp file rather than an unconditional ALL target: the DEPENDS
+# list below makes Ninja re-run vendoring when a submodule file or patch is edited, and
+# skip it (no dotnet startup, no git apply) when nothing changed -- which matters because
+# zimodem_vendor sits ahead of zimodem_core in every single build (including ones where
+# nothing native changed at all, e.g. building a C# project that merely references
+# ZiModemHost.vcxproj). CONFIGURE_DEPENDS makes CMake re-glob these directories on every
+# regenerate so added/removed files (a new patch, a submodule update) are picked up
+# without a manual reconfigure; in-place edits to an existing file are caught by the
+# DEPENDS list itself, no reconfigure needed.
+file(GLOB_RECURSE ZIMODEM_VENDOR_INPUTS CONFIGURE_DEPENDS
+    "${ZIMODEM_REPO_ROOT}/external/zimodem/*"
+    "${ZIMODEM_REPO_ROOT}/patches/zimodem/*"
+)
+
+set(ZIMODEM_VENDOR_STAMP "${CMAKE_BINARY_DIR}/zimodem_vendor.stamp")
+
+add_custom_command(
+    OUTPUT "${ZIMODEM_VENDOR_STAMP}"
     COMMAND dotnet run --project "${ZIMODEM_REPO_ROOT}/tools/Vendoring" -- vendor
+    COMMAND ${CMAKE_COMMAND} -E touch "${ZIMODEM_VENDOR_STAMP}"
     WORKING_DIRECTORY "${ZIMODEM_REPO_ROOT}"
+    DEPENDS ${ZIMODEM_VENDOR_INPUTS}
     COMMENT "Vendoring external/zimodem (copy + apply patches/zimodem/SERIES)"
     VERBATIM
 )
+
+add_custom_target(zimodem_vendor ALL DEPENDS "${ZIMODEM_VENDOR_STAMP}")
 
 set(ZIMODEM_VENDOR_DIR "${ZIMODEM_REPO_ROOT}/build/vendor/zimodem-src" CACHE PATH
     "Location of the vendored+patched zimodem source tree" FORCE)

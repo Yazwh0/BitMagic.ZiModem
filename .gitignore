@@ -5,3 +5,4 @@ obj/
 .vs/
 CMakeFiles/
 CMakeCache.txt
+*.log
