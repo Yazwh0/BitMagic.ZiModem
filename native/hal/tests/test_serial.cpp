@@ -28,18 +28,42 @@ TEST_CASE("feed_input makes bytes available to read, in order (host -> modem dir
     REQUIRE(zimodem_hal::serial::read() == -1);
 }
 
-TEST_CASE("write invokes the registered output callback (modem -> host direction)", "[serial]")
+TEST_CASE("write fires the data-ready callback and queues bytes for rx_read (modem -> host direction)", "[serial]")
 {
     SerialGuard guard;
-    std::vector<uint8_t> captured;
-    zimodem_hal::serial::set_output_callback([&](const uint8_t* data, size_t len) {
-        captured.assign(data, data + len);
-    });
+    int ready_calls = 0;
+    zimodem_hal::serial::set_data_ready_callback([&]() { ready_calls++; });
 
     const uint8_t reply[] = {'O', 'K', '\r', '\n'};
     zimodem_hal::serial::write(reply, sizeof(reply));
 
+    REQUIRE(ready_calls == 1);
+    std::vector<uint8_t> captured;
+    while (zimodem_hal::serial::rx_available())
+        captured.push_back(static_cast<uint8_t>(zimodem_hal::serial::rx_read()));
     REQUIRE(captured == std::vector<uint8_t>({'O', 'K', '\r', '\n'}));
+    REQUIRE(zimodem_hal::serial::rx_read() == -1);
+}
+
+TEST_CASE("the rx queue is unbounded and undelayed -- no capacity, flow control, or timing model", "[serial]")
+{
+    // Deliberate: see serial_port.h's file comment. A UART chip emulation on the other
+    // side of rx_available/rx_read owns baud-rate pacing, its own bounded FIFO, and
+    // overrun -- this queue is just the wire, real-time and uncapped.
+    SerialGuard guard;
+    std::vector<uint8_t> lots(1000, 'A');
+    zimodem_hal::serial::write(lots.data(), lots.size());
+    for (size_t i = 0; i < lots.size(); i++)
+        REQUIRE(zimodem_hal::serial::rx_read() == 'A');
+    REQUIRE(zimodem_hal::serial::rx_read() == -1);
+}
+
+TEST_CASE("available_for_write always reports plenty of room", "[serial]")
+{
+    // See serial_port.h's file comment -- this HAL deliberately doesn't model flow
+    // control, so this is unconditional, not derived from any state.
+    SerialGuard guard;
+    REQUIRE(zimodem_hal::serial::available_for_write() > 0);
 }
 
 TEST_CASE("HardwareSerialCompat routes available/read/peek/write through the serial_port queues", "[serial]")
@@ -53,12 +77,8 @@ TEST_CASE("HardwareSerialCompat routes available/read/peek/write through the ser
     REQUIRE(serial.peek() == 'X');
     REQUIRE(serial.read() == 'X');
 
-    std::vector<uint8_t> out;
-    zimodem_hal::serial::set_output_callback([&](const uint8_t* data, size_t len) {
-        out.assign(data, data + len);
-    });
     serial.write(static_cast<uint8_t>('Z'));
-    REQUIRE(out == std::vector<uint8_t>({'Z'}));
+    REQUIRE(zimodem_hal::serial::rx_read() == 'Z');
 }
 
 TEST_CASE("readBytes collects exactly `length` bytes when they arrive before the timeout", "[serial]")
@@ -90,16 +110,16 @@ TEST_CASE("readBytes gives up after the timeout and returns however many bytes i
     REQUIRE(n == 2);
 }
 
-TEST_CASE("printf formats and writes through the output callback", "[serial]")
+TEST_CASE("printf formats and writes through to rx_read", "[serial]")
 {
     SerialGuard guard;
     HardwareSerialCompat serial;
-    std::string captured;
-    zimodem_hal::serial::set_output_callback([&](const uint8_t* data, size_t len) {
-        captured.assign(reinterpret_cast<const char*>(data), len);
-    });
 
     // Matches zcommand.ino's `HWSerial.printf("%d%s", rcvdCrc8, EOLN.c_str());`
     serial.printf("%d%s", 42, "\r\n");
+
+    std::string captured;
+    while (zimodem_hal::serial::rx_available())
+        captured.push_back(static_cast<char>(zimodem_hal::serial::rx_read()));
     REQUIRE(captured == "42\r\n");
 }

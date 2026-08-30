@@ -13,6 +13,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # executables/shared libs that already need it anyway.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# Statically link the MSVC runtime into every target here. zimodem_host.dll gets
+# xcopy-deployed next to a .NET host (BitMagic.X16Emulator) whose process has none of
+# msvcp140[d].dll / vcruntime140[d].dll / ucrtbase[d].dll on its DLL search path -- and a
+# Debug build pulls the *non-redistributable* debug CRT, so the load fails with
+# 0x8007007E "one of its dependencies could not be found". Static = nothing to find.
+# The C ABI passes no C++ types and does no cross-boundary malloc/free (see
+# zimodem_host.h), so a private CRT in the DLL is safe. Generator expression so Debug
+# gets /MTd and Release /MT. Honoured because cmake_minimum_required(3.20) sets
+# CMP0091=NEW.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 # All executables and shared libraries land in one directory (rather than each target's
 # own subdirectory under build/native) so a test .exe can find zimodem_host.dll next to
 # it at runtime -- Windows searches the executable's own directory first, and zimodem_host

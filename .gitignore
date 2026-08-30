@@ -6,3 +6,13 @@ obj/
 CMakeFiles/
 CMakeCache.txt
 *.log
+
+# MSBuild / MSVC intermediates (ZiModemHost.vcxproj built via Visual Studio)
+x64/
+Win32/
+*.ifc
+*.ifc.dt.d.json
+*.ifc.dt.module.json
+*.tlog
+*.obj
+*.pdb

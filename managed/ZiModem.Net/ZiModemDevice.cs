@@ -89,12 +89,40 @@ public sealed class ZiModemDevice : IDisposable
         NativeMethods.zimodem_host_write_serial(_handle, data.ToArray(), (nuint)data.Length);
     }
 
-    private void OnSerialOutNative(nint userContext, nint data, nuint len)
+    /// <summary>
+    /// Host -> modem pin write (the reverse of <see cref="SignalChanged"/>, which is
+    /// modem -> host only) -- e.g. drive <see cref="ZimodemPin.Cts"/> to
+    /// <see cref="ZimodemPinState.Inactive"/> to tell the modem to hold off sending,
+    /// matching real ESP32 hardware flow control. The vendored firmware checks this
+    /// exact pin already (serout.ino's digitalRead(pinCTS)). Thread-safe; safe to call
+    /// from any thread, including from within an event handler.
+    /// </summary>
+    /// <remarks>
+    /// Don't leave CTS inactive indefinitely with nothing planning to reassert it --
+    /// the firmware's background thread busy-waits (no timeout) once its own internal
+    /// buffer fills, until CTS goes active again.
+    /// </remarks>
+    public void SetPin(ZimodemPin pin, ZimodemPinState state)
     {
-        var buffer = new byte[(int)len];
-        if (len > 0)
-            Marshal.Copy(data, buffer, 0, (int)len);
-        SerialDataReceived?.Invoke(this, new SerialDataEventArgs(buffer));
+        ThrowIfDisposed();
+        NativeMethods.zimodem_host_set_pin(_handle, (int)pin, (int)state);
+    }
+
+    private void OnSerialOutNative(nint userContext)
+    {
+        // Payload-less notification -- drain the native RX queue ourselves via the poll
+        // functions to reconstruct the same batch-of-bytes event this raised when the
+        // native callback still carried data/len directly.
+        List<byte>? buffer = null;
+        while (NativeMethods.zimodem_host_rx_available(_handle) != 0)
+        {
+            int b = NativeMethods.zimodem_host_rx_read(_handle);
+            if (b < 0)
+                break;
+            (buffer ??= new List<byte>()).Add((byte)b);
+        }
+        if (buffer is { Count: > 0 })
+            SerialDataReceived?.Invoke(this, new SerialDataEventArgs(buffer.ToArray()));
     }
 
     private void OnSignalNative(nint userContext, int pin, int active)

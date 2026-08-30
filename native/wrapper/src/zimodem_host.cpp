@@ -110,10 +110,10 @@ zimodem_handle zimodem_host_create(const zimodem_host_config* cfg)
     if (inst == nullptr)
         return nullptr;
 
-    zimodem_hal::serial::set_output_callback([inst](const uint8_t* data, size_t len) {
+    zimodem_hal::serial::set_data_ready_callback([inst]() {
         std::lock_guard<std::mutex> lock(inst->callback_mutex);
         if (inst->on_serial_out)
-            inst->on_serial_out(inst->user_context, data, len);
+            inst->on_serial_out(inst->user_context);
     });
     zimodem_hal::pins::set_signal_callback([inst](int pin, int value) {
         std::lock_guard<std::mutex> lock(inst->callback_mutex);
@@ -163,6 +163,30 @@ int zimodem_host_write_serial(zimodem_handle h, const uint8_t* data, size_t len)
     return 0;
 }
 
+int zimodem_host_rx_available(zimodem_handle h)
+{
+    auto* inst = reinterpret_cast<zimodem_instance*>(h);
+    if (inst == nullptr)
+        return 0;
+    return zimodem_hal::serial::rx_available() ? 1 : 0;
+}
+
+int zimodem_host_rx_read(zimodem_handle h)
+{
+    auto* inst = reinterpret_cast<zimodem_instance*>(h);
+    if (inst == nullptr)
+        return -1;
+    return zimodem_hal::serial::rx_read();
+}
+
+void zimodem_host_set_pin(zimodem_handle h, int pin, int value)
+{
+    auto* inst = reinterpret_cast<zimodem_instance*>(h);
+    if (inst == nullptr)
+        return;
+    zimodem_hal::pins::digital_write(pin, value);
+}
+
 void zimodem_host_destroy(zimodem_handle h)
 {
     auto* inst = reinterpret_cast<zimodem_instance*>(h);
@@ -173,7 +197,7 @@ void zimodem_host_destroy(zimodem_handle h)
     if (inst->worker.joinable())
         inst->worker.join();
 
-    zimodem_hal::serial::set_output_callback(nullptr);
+    zimodem_hal::serial::set_data_ready_callback(nullptr);
     zimodem_hal::pins::set_signal_callback(nullptr);
     zimodem_hal::log::set_sink(nullptr);
 

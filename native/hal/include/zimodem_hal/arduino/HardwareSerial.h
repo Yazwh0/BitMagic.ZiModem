@@ -15,6 +15,10 @@
 class HardwareSerialCompat : public Stream
 {
 public:
+    // Baud rate is intentionally discarded -- see serial_port.h's file comment: this HAL
+    // is deliberately real-time and doesn't model flow control or transmission pacing.
+    // A UART chip emulation sitting on the other side of rx_available/rx_read is where
+    // baud-rate-paced timing belongs, tracking its own (emulated) clock.
     void begin(unsigned long /*baud*/) {}
     void begin(unsigned long /*baud*/, uint32_t /*config*/) {}
     void begin(unsigned long /*baud*/, uint32_t /*config*/, int /*rxPin*/, int /*txPin*/) {}
@@ -30,10 +34,9 @@ public:
     size_t write(const uint8_t* buf, size_t size) override { return zimodem_hal::serial::write(buf, size); }
     using Print::write;
 
-    // No backpressure on this virtual UART -- always room, matching how the ESP8266
-    // branch's flow-control checks (`HWSerial.availableForWrite() >= SER_BUFSIZE`, see
-    // serout.ino) expect a large-but-finite value rather than "infinite".
-    int availableForWrite() override { return 4096; }
+    // Always plenty of room -- see zimodem_hal::serial::available_for_write and this
+    // file's own comment on begin() for why this HAL doesn't model flow control.
+    int availableForWrite() override { return zimodem_hal::serial::available_for_write(); }
     void flush() override {}
 
     // Matches real Arduino Stream::readBytes: polls read() until `length` bytes are

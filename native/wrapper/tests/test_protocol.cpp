@@ -43,15 +43,47 @@ namespace
         ~CoreTestGuard() { zimodem_hal::net::global_shutdown(); }
     };
 
+    // Drains whatever's already queued into `out` immediately (bytes written before
+    // anyone registered a data-ready callback -- e.g. setup()'s startup banner, flushed
+    // synchronously via flushSerial() -- would otherwise sit there unclaimed until
+    // whichever capture happens to run next), then registers a callback so future writes
+    // get drained the same way as they arrive.
+    void drain_into(std::string& out)
+    {
+        while (zimodem_hal::serial::rx_available())
+            out.push_back(static_cast<char>(zimodem_hal::serial::rx_read()));
+        zimodem_hal::serial::set_data_ready_callback([&out]() {
+            while (zimodem_hal::serial::rx_available())
+                out.push_back(static_cast<char>(zimodem_hal::serial::rx_read()));
+        });
+    }
+
     std::string capture_output_over(int loop_iterations)
     {
         std::string out;
-        zimodem_hal::serial::set_output_callback([&](const uint8_t* data, size_t len) {
-            out.append(reinterpret_cast<const char*>(data), len);
-        });
+        drain_into(out);
         for (int i = 0; i < loop_iterations; i++)
             loop();
         return out;
+    }
+
+    // Pumps loop() (with real delay between calls, unlike capture_output_over's tight
+    // loop) until output has gone quiet for a few consecutive iterations, discarding
+    // whatever it collects. Used for the startup banner, which streams out gradually
+    // rather than all at once -- a fixed small iteration count is inherently fragile
+    // here since it's really a real-time budget, not an iteration count.
+    void discard_startup_output()
+    {
+        std::string discarded;
+        drain_into(discarded);
+        int quietIterations = 0;
+        for (int i = 0; i < 400 && quietIterations < 10; i++)
+        {
+            size_t before = discarded.size();
+            loop();
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            quietIterations = (discarded.size() == before) ? quietIterations + 1 : 0;
+        }
     }
 
     // Pumps loop() while appending newly-produced serial output onto `collected`
@@ -61,9 +93,7 @@ namespace
     template <typename Predicate>
     void pump_more(std::string& collected, Predicate done, int maxIterations = 400)
     {
-        zimodem_hal::serial::set_output_callback([&](const uint8_t* data, size_t len) {
-            collected.append(reinterpret_cast<const char*>(data), len);
-        });
+        drain_into(collected);
         for (int i = 0; i < maxIterations && !done(); i++)
         {
             loop();
@@ -144,7 +174,7 @@ TEST_CASE("an unrecognized AT command returns ERROR, not a silent no-op", "[prot
 {
     CoreTestGuard guard;
     setup();
-    capture_output_over(3); // discard startup banner
+    discard_startup_output();
 
     // '%' is a permanently-reserved/disabled command in the vendored firmware (see
     // zcommand.ino's switch(lastCmd), case '%': result=ZERROR unconditionally) -- a
@@ -159,7 +189,7 @@ TEST_CASE("+++ escapes back to command mode without hanging up, then ATH hangs u
 {
     CoreTestGuard guard;
     setup();
-    capture_output_over(3);
+    discard_startup_output();
 
     zimodem_hal::net::TcpListener listener;
     REQUIRE(listener.listen(19401));
@@ -229,7 +259,7 @@ TEST_CASE("phonebook entries survive a restart (add via IRC menu, reload picks i
     REQUIRE(listener.listen(19406));
 
     setup();
-    capture_output_over(3);
+    discard_startup_output();
 
     feed("AT+irc\r");
     std::string response = pump_until([&] { return false; }, 30);
@@ -252,7 +282,7 @@ TEST_CASE("phonebook entries survive a restart (add via IRC menu, reload picks i
     // from /zphonebook.txt -- so this proves persistence actually round-trips through
     // the filesystem, not just in-memory state surviving a warm process.
     setup();
-    capture_output_over(3);
+    discard_startup_output();
 
     feed("ATD42\r");
     std::string dialResponse = pump_until([&] { return listener.has_pending_client(); });
@@ -268,7 +298,7 @@ TEST_CASE("AT&g fetches a URL over real HTTP and reports a checksummed byte coun
 {
     CoreTestGuard guard;
     setup();
-    capture_output_over(3);
+    discard_startup_output();
 
     const std::string body = "Hello, World!";
 
@@ -331,7 +361,7 @@ TEST_CASE("AT&g over FTP always returns ERROR -- a confirmed upstream defect, no
     // that cannot work.
     CoreTestGuard guard;
     setup();
-    capture_output_over(3);
+    discard_startup_output();
 
     feed("AT&g\"ftp://user:pass@127.0.0.1:19403/whatever.txt\"\r");
     std::string response = capture_output_over(5);
@@ -342,7 +372,7 @@ TEST_CASE("AT+irc walks the phonebook-based connect menu and joins a channel ove
 {
     CoreTestGuard guard;
     setup();
-    capture_output_over(3);
+    discard_startup_output();
 
     zimodem_hal::net::TcpListener listener;
     REQUIRE(listener.listen(19405));

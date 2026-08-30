@@ -12,6 +12,25 @@
 // ring indicator, etc.) as events instead of physical pin toggles.
 namespace zimodem_hal::pins
 {
+    // Mirrors the DEFAULT_PIN_*/DEFAULT_CTS_* constants for the ZIMODEM_HOST platform
+    // branch (patches/zimodem/0001-add-zimodem-host-platform-branch.patch). Duplicated
+    // here rather than shared with a header: those macros are defined inline inside
+    // zimodem.ino itself (compiled into zimodem_core, a separate translation unit this
+    // HAL doesn't include from). Keep these in sync if that patch's pin assignments ever
+    // change -- named so callers reading/writing a pin can say kCts instead of a bare 9.
+    constexpr int kPinDsr = 5;
+    constexpr int kPinDtr = 6;
+    constexpr int kPinRi = 7;
+    constexpr int kPinRts = 8;
+    constexpr int kPinCts = 9;
+    constexpr int kPinDcd = 10;
+    // kPinOth is -1 (no pin) for the host branch -- not a real GPIO, not modeled here.
+
+    // DEFAULT_CTS_ACTIVE/INACTIVE (zimodem.ino) -- active-low, like the rest of this
+    // firmware's control lines.
+    constexpr int kCtsActive = 0;   // LOW
+    constexpr int kCtsInactive = 1; // HIGH
+
     using SignalCallback = std::function<void(int pin, int value)>;
 
     void pin_mode(int pin, int mode);

@@ -28,11 +28,15 @@ internal static class NativeMethods
         public string DataDir;
     }
 
-    // IntPtr (not `string`) for the message parameter: the callback fires on the native
-    // background thread, and marshaling a `const char*` to `string` on every single log
-    // line is needless overhead for callbacks that may go unused. Callers that want the
-    // text call Marshal.PtrToStringAnsi on it themselves (see ZiModemDevice).
-    internal delegate void SerialOutCallback(nint userContext, nint data, nuint len);
+    // Payload-less: on_serial_out is a "go drain it" notification now, not a data
+    // carrier -- see zimodem_host_rx_available/zimodem_host_rx_read below and the
+    // comment on zimodem_serial_out_cb in zimodem_host.h.
+    //
+    // IntPtr (not `string`) for the log message parameter: the callback fires on the
+    // native background thread, and marshaling a `const char*` to `string` on every
+    // single log line is needless overhead for callbacks that may go unused. Callers
+    // that want the text call Marshal.PtrToStringAnsi on it themselves (see ZiModemDevice).
+    internal delegate void SerialOutCallback(nint userContext);
     internal delegate void SignalCallback(nint userContext, int pin, int active);
     internal delegate void LogCallback(nint userContext, nint message);
 
@@ -52,6 +56,22 @@ internal static class NativeMethods
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
     internal static extern int zimodem_host_write_serial(nint handle, byte[] data, nuint len);
+
+    // Modem -> host, poll side. Backs ZiModemDevice's reconstruction of
+    // SerialDataReceived. Unbounded/untracked for overrun on the native side
+    // deliberately -- see zimodem_hal::serial's own header comment: a real UART chip
+    // owns its own fixed-depth FIFO and overrun behavior, not this wire.
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int zimodem_host_rx_available(nint handle);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int zimodem_host_rx_read(nint handle);
+
+    // Host -> modem pin write (the reverse of SignalCallback, which is modem -> host
+    // only) -- see zimodem_host_set_pin's own comment in zimodem_host.h for the flow-
+    // control use case and the "don't leave CTS deasserted forever" hang warning.
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern void zimodem_host_set_pin(nint handle, int pin, int value);
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
     internal static extern void zimodem_host_destroy(nint handle);

@@ -9,13 +9,19 @@ namespace zimodem_hal::serial
     {
         std::mutex g_mutex;
         std::deque<uint8_t> g_input;
-        OutputCallback g_output_callback;
+        std::deque<uint8_t> g_rx_queue;
+        DataReadyCallback g_data_ready_callback;
+
+        // Comfortably above SER_BUFSIZE (128, the firmware's own constant) so its
+        // enqueByte/serialOutDeque gate check always passes -- see header for why this
+        // HAL deliberately doesn't model real flow control.
+        constexpr int kPlentyOfRoom = 4096;
     }
 
-    void set_output_callback(OutputCallback cb)
+    void set_data_ready_callback(DataReadyCallback cb)
     {
         std::lock_guard<std::mutex> lock(g_mutex);
-        g_output_callback = std::move(cb);
+        g_data_ready_callback = std::move(cb);
     }
 
     void feed_input(const uint8_t* data, size_t len)
@@ -51,20 +57,44 @@ namespace zimodem_hal::serial
 
     size_t write(const uint8_t* data, size_t len)
     {
-        OutputCallback cb;
+        DataReadyCallback cb;
         {
             std::lock_guard<std::mutex> lock(g_mutex);
-            cb = g_output_callback;
+            for (size_t i = 0; i < len; i++)
+                g_rx_queue.push_back(data[i]);
+            cb = g_data_ready_callback;
         }
-        if (cb)
-            cb(data, len);
+        if (len > 0 && cb)
+            cb();
         return len;
+    }
+
+    bool rx_available()
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        return !g_rx_queue.empty();
+    }
+
+    int rx_read()
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        if (g_rx_queue.empty())
+            return -1;
+        uint8_t b = g_rx_queue.front();
+        g_rx_queue.pop_front();
+        return b;
+    }
+
+    int available_for_write()
+    {
+        return kPlentyOfRoom;
     }
 
     void reset_for_testing()
     {
         std::lock_guard<std::mutex> lock(g_mutex);
         g_input.clear();
-        g_output_callback = nullptr;
+        g_rx_queue.clear();
+        g_data_ready_callback = nullptr;
     }
 }

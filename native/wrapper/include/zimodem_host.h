@@ -37,6 +37,25 @@ extern "C" {
 
 typedef struct zimodem_instance* zimodem_handle;
 
+// Pin numbers for zimodem_host_set_pin/zimodem_signal_cb -- mirrors the DEFAULT_PIN_*
+// constants for the ZIMODEM_HOST platform branch
+// (patches/zimodem/0001-add-zimodem-host-platform-branch.patch). Duplicated here
+// (rather than shared with a header) since this file has to stay plain C for the
+// P/Invoke boundary, and those macros are internal to zimodem.ino's own translation
+// unit. Keep in sync if that patch's pin assignments ever change. ZIMODEM_PIN_OTH is
+// intentionally absent -- it's -1 (no pin) for this platform branch, not a real GPIO.
+#define ZIMODEM_PIN_DSR 5
+#define ZIMODEM_PIN_DTR 6
+#define ZIMODEM_PIN_RI  7
+#define ZIMODEM_PIN_RTS 8
+#define ZIMODEM_PIN_CTS 9
+#define ZIMODEM_PIN_DCD 10
+
+// DEFAULT_CTS_ACTIVE/INACTIVE (zimodem.ino) -- active-low, like the rest of this
+// firmware's control lines. Applies to all the pins above, not just CTS.
+#define ZIMODEM_PIN_ACTIVE 0   // LOW
+#define ZIMODEM_PIN_INACTIVE 1 // HIGH
+
 typedef struct zimodem_host_config
 {
     // Host directory the emulated SPIFFS filesystem (config, phonebook, logs) is rooted
@@ -53,7 +72,15 @@ typedef struct zimodem_host_config
 // do not block in these, and do not call zimodem_host_destroy() from within one (it
 // joins that same thread and will deadlock). Calling zimodem_host_write_serial() from a
 // callback is fine (it's just a thread-safe queue push).
-typedef void (*zimodem_serial_out_cb)(void* user_context, const uint8_t* data, size_t len);
+//
+// on_serial_out carries no data -- it fires whenever the modem has queued at least one
+// byte for the host, as a "go drain it" wake-up rather than the payload itself. Call
+// zimodem_host_rx_read() in a loop from within this callback (or from any other thread,
+// at any time) until zimodem_host_rx_available() says empty. This queue is unbounded
+// and untracked for overrun on this side deliberately -- a real UART chip (e.g. a
+// TL16C2550) owns its own fixed-depth FIFO and overrun behavior; if you're emulating
+// one, that belongs in your own code on top of this, not here.
+typedef void (*zimodem_serial_out_cb)(void* user_context);
 typedef void (*zimodem_signal_cb)(void* user_context, int pin, int active);
 typedef void (*zimodem_log_cb)(void* user_context, const char* message);
 
@@ -80,6 +107,25 @@ ZIMODEM_API int zimodem_host_start(zimodem_handle h);
 // thread's next loop() iteration to consume. Returns 0 on success, non-zero if h is
 // invalid.
 ZIMODEM_API int zimodem_host_write_serial(zimodem_handle h, const uint8_t* data, size_t len);
+
+// Modem -> host, poll side. zimodem_host_rx_available() returns non-zero if a byte is
+// waiting; zimodem_host_rx_read() dequeues and returns it (-1 if empty, or if h is
+// invalid). Both are thread-safe and callable from any thread, at any time.
+ZIMODEM_API int zimodem_host_rx_available(zimodem_handle h);
+ZIMODEM_API int zimodem_host_rx_read(zimodem_handle h);
+
+// Host -> modem pin write (the reverse of zimodem_signal_cb, which is modem -> host
+// only) -- e.g. drive ZIMODEM_PIN_CTS to ZIMODEM_PIN_INACTIVE to tell the modem to hold
+// off sending, matching real ESP32 hardware flow control
+// (uart_set_hw_flow_ctrl(..., UART_HW_FLOWCTRL_CTS_RTS, ...) pausing transmission when
+// CTS is deasserted): the vendored firmware's own serout.ino already checks this exact
+// pin via digitalRead(pinCTS), and the availableForWrite() value its enqueByte/
+// serialOutDeque gate on is now computed directly from it. IMPORTANT: don't leave CTS
+// deasserted indefinitely with nothing planning to reassert it -- enqueByte blocks the
+// firmware's background thread in a busy-wait once its own internal buffer fills, with
+// no timeout, until CTS goes active again; leaving it inactive forever hangs the modem.
+// Thread-safe: safe to call from any thread, at any time. A no-op if h is invalid.
+ZIMODEM_API void zimodem_host_set_pin(zimodem_handle h, int pin, int value);
 
 // Stops the background thread (if started) and joins it, then frees the instance. h is
 // invalid after this call. Safe to call from any thread other than the background

@@ -39,15 +39,49 @@ namespace
         ~CoreTestGuard() { zimodem_hal::net::global_shutdown(); }
     };
 
+    // Drains whatever's already queued into `out` immediately (bytes written before
+    // anyone registered a data-ready callback -- e.g. setup()'s startup banner, flushed
+    // synchronously via flushSerial() -- would otherwise sit there unclaimed until
+    // whichever capture happens to run next), then registers a callback so future writes
+    // get drained the same way as they arrive.
+    void drain_into(std::string& out)
+    {
+        while (zimodem_hal::serial::rx_available())
+            out.push_back(static_cast<char>(zimodem_hal::serial::rx_read()));
+        zimodem_hal::serial::set_data_ready_callback([&out]() {
+            while (zimodem_hal::serial::rx_available())
+                out.push_back(static_cast<char>(zimodem_hal::serial::rx_read()));
+        });
+    }
+
     std::string capture_output_over(int loop_iterations)
     {
         std::string out;
-        zimodem_hal::serial::set_output_callback([&](const uint8_t* data, size_t len) {
-            out.append(reinterpret_cast<const char*>(data), len);
-        });
+        drain_into(out);
         for (int i = 0; i < loop_iterations; i++)
             loop();
         return out;
+    }
+
+    // Pumps loop() (with real delay between calls, unlike capture_output_over's tight
+    // loop) until output has gone quiet for a few consecutive iterations, discarding
+    // whatever it collects. Used for the startup banner, which streams out gradually
+    // rather than all at once -- a fixed small iteration count is inherently fragile
+    // here since it's really a real-time budget, not an iteration count, and is exactly
+    // as sensitive to whatever adds a bit of per-byte overhead (a mutex, a slower
+    // machine) as to the amount of banner text itself.
+    void discard_startup_output()
+    {
+        std::string discarded;
+        drain_into(discarded);
+        int quietIterations = 0;
+        for (int i = 0; i < 400 && quietIterations < 10; i++)
+        {
+            size_t before = discarded.size();
+            loop();
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            quietIterations = (discarded.size() == before) ? quietIterations + 1 : 0;
+        }
     }
 
     // Matches how a real terminal driving the modem would poll: keep pumping loop() and
@@ -56,9 +90,7 @@ namespace
     std::string pump_until(Predicate done, int maxIterations = 400)
     {
         std::string collected;
-        zimodem_hal::serial::set_output_callback([&](const uint8_t* data, size_t len) {
-            collected.append(reinterpret_cast<const char*>(data), len);
-        });
+        drain_into(collected);
         for (int i = 0; i < maxIterations && !done(); i++)
         {
             loop();
@@ -84,7 +116,7 @@ TEST_CASE("plain AT command echoes and replies OK", "[smoke]")
 {
     CoreTestGuard guard;
     setup();
-    capture_output_over(3); // let any startup banner flush out and discard it
+    discard_startup_output();
 
     const uint8_t cmd[] = {'A', 'T', '\r'};
     zimodem_hal::serial::feed_input(cmd, sizeof(cmd));
@@ -97,7 +129,7 @@ TEST_CASE("ATDT dials out over a real TCP socket, gets CONNECT, and DCD asserts 
 {
     CoreTestGuard guard;
     setup();
-    capture_output_over(3);
+    discard_startup_output();
 
     zimodem_hal::net::TcpListener listener;
     REQUIRE(listener.listen(19201));
@@ -118,7 +150,7 @@ TEST_CASE("after CONNECT, bytes typed at the terminal reach the socket and vice 
 {
     CoreTestGuard guard;
     setup();
-    capture_output_over(3);
+    discard_startup_output();
 
     zimodem_hal::net::TcpListener listener;
     REQUIRE(listener.listen(19202));

@@ -30,14 +30,19 @@ namespace
     {
         std::mutex mutex;
         std::string serialOut;
+        zimodem_handle handle = nullptr; // set before zimodem_host_start() so onSerialOut can drain via it
         int lastSignalPin = -1;
         int lastSignalValue = -1;
 
-        static void onSerialOut(void* ctx, const uint8_t* data, size_t len)
+        // on_serial_out is now a payload-less "go drain it" notification (see
+        // zimodem_host.h) -- pull the actual bytes via the public rx_available/rx_read
+        // poll functions rather than a data/len parameter.
+        static void onSerialOut(void* ctx)
         {
             auto* self = static_cast<Harness*>(ctx);
             std::lock_guard<std::mutex> lock(self->mutex);
-            self->serialOut.append(reinterpret_cast<const char*>(data), len);
+            while (zimodem_host_rx_available(self->handle))
+                self->serialOut.push_back(static_cast<char>(zimodem_host_rx_read(self->handle)));
         }
         static void onSignal(void* ctx, int pin, int active)
         {
@@ -148,6 +153,7 @@ TEST_CASE("create -> set_callbacks -> start -> AT command round trip -> destroy"
     zimodem_host_config cfg{tempDir.c_str()};
     HandleGuard guard(zimodem_host_create(&cfg));
     REQUIRE(guard.h != nullptr);
+    harness.handle = guard.h;
 
     zimodem_host_set_callbacks(guard.h, Harness::onSerialOut, Harness::onSignal, Harness::onLog, &harness);
     REQUIRE(zimodem_host_start(guard.h) == 0);
@@ -167,6 +173,7 @@ TEST_CASE("ATDT dial through the C ABI asserts DCD via the signal callback", "[c
     zimodem_host_config cfg{tempDir.c_str()};
     HandleGuard guard(zimodem_host_create(&cfg));
     REQUIRE(guard.h != nullptr);
+    harness.handle = guard.h;
     zimodem_host_set_callbacks(guard.h, Harness::onSerialOut, Harness::onSignal, Harness::onLog, &harness);
     REQUIRE(zimodem_host_start(guard.h) == 0);
 
