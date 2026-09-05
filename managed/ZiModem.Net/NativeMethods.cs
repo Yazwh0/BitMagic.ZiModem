@@ -40,6 +40,10 @@ internal static class NativeMethods
     internal delegate void SignalCallback(nint userContext, int pin, int active);
     internal delegate void LogCallback(nint userContext, nint message);
 
+    // Fired on the native background thread whenever the firmware changes baud / data
+    // bits / parity / stop bits. Argument layout matches zimodem_host_get_line_config.
+    internal delegate void LineConfigCallback(nint userContext, int baud, int dataBits, int parity, int stopBitsX10);
+
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
     internal static extern nint zimodem_host_create(ref ZimodemHostConfig cfg);
 
@@ -49,6 +53,7 @@ internal static class NativeMethods
         SerialOutCallback? onSerialOut,
         SignalCallback? onSignal,
         LogCallback? onLog,
+        LineConfigCallback? onLineConfig,
         nint userContext);
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
@@ -72,6 +77,20 @@ internal static class NativeMethods
     // control use case and the "don't leave CTS deasserted forever" hang warning.
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
     internal static extern void zimodem_host_set_pin(nint handle, int pin, int value);
+
+    // The modem's current serial line settings (baud / data bits / parity / stop bits),
+    // as last applied by the vendored firmware. Backs ZiModemDevice.GetLineConfig, which
+    // a UART emulation uses to check its own divisor/framing matches -- a mismatch is
+    // what garbles data on real hardware. out_baud is 0 until the firmware's setup() has
+    // run. Parity is one of the ZIMODEM_PARITY_* values (0 none / 1 odd / 2 even);
+    // stopBitsX10 is stop bits times ten (10, 15, 20).
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern void zimodem_host_get_line_config(
+        nint handle,
+        out int baud,
+        out int dataBits,
+        out int parity,
+        out int stopBitsX10);
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
     internal static extern void zimodem_host_destroy(nint handle);

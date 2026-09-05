@@ -80,9 +80,17 @@ typedef struct zimodem_host_config
 // and untracked for overrun on this side deliberately -- a real UART chip (e.g. a
 // TL16C2550) owns its own fixed-depth FIFO and overrun behavior; if you're emulating
 // one, that belongs in your own code on top of this, not here.
+//
+// on_line_config fires whenever the firmware changes the serial line settings (baud,
+// data bits, parity, or stop bits) -- an AT config, an ATSxx write, or the power-on
+// default being applied -- and NOT for a redundant re-apply of the current settings.
+// Its argument layout matches zimodem_host_get_line_config's outparams (parity is a
+// ZIMODEM_PARITY_* value; stop_bits_x10 is stop bits times ten).
 typedef void (*zimodem_serial_out_cb)(void* user_context);
 typedef void (*zimodem_signal_cb)(void* user_context, int pin, int active);
 typedef void (*zimodem_log_cb)(void* user_context, const char* message);
+typedef void (*zimodem_line_config_cb)(void* user_context,
+                                       int baud, int data_bits, int parity, int stop_bits_x10);
 
 // Allocates an instance and configures the data directory. Does not start the background
 // thread. Returns NULL if cfg is NULL or cfg->data_dir is NULL/empty, if an instance
@@ -96,6 +104,7 @@ ZIMODEM_API void zimodem_host_set_callbacks(zimodem_handle h,
                                              zimodem_serial_out_cb on_serial_out,
                                              zimodem_signal_cb on_signal,
                                              zimodem_log_cb on_log,
+                                             zimodem_line_config_cb on_line_config,
                                              void* user_context);
 
 // Starts the background thread: runs the vendored sketch's setup() once, then loop()
@@ -126,6 +135,31 @@ ZIMODEM_API int zimodem_host_rx_read(zimodem_handle h);
 // no timeout, until CTS goes active again; leaving it inactive forever hangs the modem.
 // Thread-safe: safe to call from any thread, at any time. A no-op if h is invalid.
 ZIMODEM_API void zimodem_host_set_pin(zimodem_handle h, int pin, int value);
+
+// Parity values reported by zimodem_host_get_line_config()'s out_parity.
+#define ZIMODEM_PARITY_NONE 0
+#define ZIMODEM_PARITY_ODD  1
+#define ZIMODEM_PARITY_EVEN 2
+
+// The modem's current serial line settings, as last applied by the vendored firmware
+// (its power-on default, or a later AT / ATSxx change). A UART emulation on this side of
+// the ABI can use these to verify its own divisor and framing match the modem's -- a
+// mismatch is exactly what produces garbage on real hardware. Any out pointer may be
+// NULL. Every non-NULL out param is always written (0 / ZIMODEM_PARITY_NONE if h is
+// invalid). While out_baud is 0 the line has not been configured yet -- treat that as
+// "not ready" and ignore the other fields.
+//
+//   out_baud          - bits per second, e.g. 1200 or 115200
+//   out_data_bits     - 5..8
+//   out_parity        - one of ZIMODEM_PARITY_* above
+//   out_stop_bits_x10 - stop bits times ten: 10 (one), 15 (one and a half), or 20 (two)
+//
+// Thread-safe: safe to call from any thread, at any time.
+ZIMODEM_API void zimodem_host_get_line_config(zimodem_handle h,
+                                              int* out_baud,
+                                              int* out_data_bits,
+                                              int* out_parity,
+                                              int* out_stop_bits_x10);
 
 // Stops the background thread (if started) and joins it, then frees the instance. h is
 // invalid after this call. Safe to call from any thread other than the background

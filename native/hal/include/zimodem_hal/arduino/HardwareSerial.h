@@ -15,13 +15,15 @@
 class HardwareSerialCompat : public Stream
 {
 public:
-    // Baud rate is intentionally discarded -- see serial_port.h's file comment: this HAL
-    // is deliberately real-time and doesn't model flow control or transmission pacing.
-    // A UART chip emulation sitting on the other side of rx_available/rx_read is where
-    // baud-rate-paced timing belongs, tracking its own (emulated) clock.
-    void begin(unsigned long /*baud*/) {}
-    void begin(unsigned long /*baud*/, uint32_t /*config*/) {}
-    void begin(unsigned long /*baud*/, uint32_t /*config*/, int /*rxPin*/, int /*txPin*/) {}
+    // Baud rate and framing are not acted on -- see serial_port.h's file comment: this
+    // HAL is deliberately real-time and doesn't model flow control or transmission
+    // pacing. A UART chip emulation on the other side of rx_available/rx_read is where
+    // baud-rate-paced timing belongs, tracking its own (emulated) clock. They are still
+    // recorded via set_line_config() so that consumer can check its settings match the
+    // modem's.
+    void begin(unsigned long baud) { zimodem_hal::serial::set_line_baud(baud); }
+    void begin(unsigned long baud, uint32_t config) { zimodem_hal::serial::set_line_config(baud, config); }
+    void begin(unsigned long baud, uint32_t config, int /*rxPin*/, int /*txPin*/) { zimodem_hal::serial::set_line_config(baud, config); }
 
     void setRxBufferSize(size_t) {}
     void setTimeout(unsigned long ms) { timeoutMs_ = ms; }

@@ -33,6 +33,10 @@ namespace
         zimodem_handle handle = nullptr; // set before zimodem_host_start() so onSerialOut can drain via it
         int lastSignalPin = -1;
         int lastSignalValue = -1;
+        int lineBaud = 0;
+        int lineDataBits = 0;
+        int lineParity = -1;
+        int lineStopBitsX10 = 0;
 
         // on_serial_out is now a payload-less "go drain it" notification (see
         // zimodem_host.h) -- pull the actual bytes via the public rx_available/rx_read
@@ -52,6 +56,15 @@ namespace
             self->lastSignalValue = active;
         }
         static void onLog(void*, const char*) {}
+        static void onLineConfig(void* ctx, int baud, int dataBits, int parity, int stopBitsX10)
+        {
+            auto* self = static_cast<Harness*>(ctx);
+            std::lock_guard<std::mutex> lock(self->mutex);
+            self->lineBaud = baud;
+            self->lineDataBits = dataBits;
+            self->lineParity = parity;
+            self->lineStopBitsX10 = stopBitsX10;
+        }
 
         std::string snapshotOutput()
         {
@@ -155,11 +168,25 @@ TEST_CASE("create -> set_callbacks -> start -> AT command round trip -> destroy"
     REQUIRE(guard.h != nullptr);
     harness.handle = guard.h;
 
-    zimodem_host_set_callbacks(guard.h, Harness::onSerialOut, Harness::onSignal, Harness::onLog, &harness);
+    zimodem_host_set_callbacks(guard.h, Harness::onSerialOut, Harness::onSignal, Harness::onLog,
+                               Harness::onLineConfig, &harness);
     REQUIRE(zimodem_host_start(guard.h) == 0);
     REQUIRE(zimodem_host_start(guard.h) != 0); // starting twice is rejected
 
     drain_startup(harness); // let the full startup banner flush out and discard it
+
+    // setup()'s begin(DEFAULT_BAUD_RATE, SERIAL_8N1) fires the line-config callback.
+    REQUIRE(wait_until([&] {
+        std::lock_guard<std::mutex> lock(harness.mutex);
+        return harness.lineBaud != 0;
+    }));
+    {
+        std::lock_guard<std::mutex> lock(harness.mutex);
+        REQUIRE(harness.lineBaud == 115200); // ZIMODEM_HOST default (patches/zimodem/0001), confirmed on hardware
+        REQUIRE(harness.lineDataBits == 8);
+        REQUIRE(harness.lineParity == ZIMODEM_PARITY_NONE);
+        REQUIRE(harness.lineStopBitsX10 == 10);
+    }
 
     feed(guard.h, "AT\r");
     REQUIRE(wait_until([&] { return harness.snapshotOutput().find("OK") != std::string::npos; }));
@@ -174,7 +201,8 @@ TEST_CASE("ATDT dial through the C ABI asserts DCD via the signal callback", "[c
     HandleGuard guard(zimodem_host_create(&cfg));
     REQUIRE(guard.h != nullptr);
     harness.handle = guard.h;
-    zimodem_host_set_callbacks(guard.h, Harness::onSerialOut, Harness::onSignal, Harness::onLog, &harness);
+    zimodem_host_set_callbacks(guard.h, Harness::onSerialOut, Harness::onSignal, Harness::onLog,
+                               Harness::onLineConfig, &harness);
     REQUIRE(zimodem_host_start(guard.h) == 0);
 
     zimodem_hal::net::global_init();

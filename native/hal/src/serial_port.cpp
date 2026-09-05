@@ -12,6 +12,11 @@ namespace zimodem_hal::serial
         std::deque<uint8_t> g_rx_queue;
         DataReadyCallback g_data_ready_callback;
 
+        // Last values seen by HardwareSerialCompat::begin(); 0 = not configured yet.
+        unsigned long g_line_baud = 0;
+        uint32_t g_line_config = 0;
+        LineConfigCallback g_line_config_callback;
+
         // Comfortably above SER_BUFSIZE (128, the firmware's own constant) so its
         // enqueByte/serialOutDeque gate check always passes -- see header for why this
         // HAL deliberately doesn't model real flow control.
@@ -90,11 +95,60 @@ namespace zimodem_hal::serial
         return kPlentyOfRoom;
     }
 
+    void set_line_config(unsigned long baud, uint32_t config)
+    {
+        LineConfigCallback cb;
+        {
+            std::lock_guard<std::mutex> lock(g_mutex);
+            if (g_line_baud == baud && g_line_config == config)
+                return; // no change -- don't fire
+            g_line_baud = baud;
+            g_line_config = config;
+            cb = g_line_config_callback;
+        }
+        if (cb)
+            cb(baud, config); // outside the lock: the callback may re-enter this HAL
+    }
+
+    void set_line_baud(unsigned long baud)
+    {
+        LineConfigCallback cb;
+        uint32_t config = 0;
+        {
+            std::lock_guard<std::mutex> lock(g_mutex);
+            if (g_line_baud == baud)
+                return;
+            g_line_baud = baud;
+            config = g_line_config;
+            cb = g_line_config_callback;
+        }
+        if (cb)
+            cb(baud, config);
+    }
+
+    void get_line_config(unsigned long* baud, uint32_t* config)
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        if (baud != nullptr)
+            *baud = g_line_baud;
+        if (config != nullptr)
+            *config = g_line_config;
+    }
+
+    void set_line_config_callback(LineConfigCallback cb)
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        g_line_config_callback = std::move(cb);
+    }
+
     void reset_for_testing()
     {
         std::lock_guard<std::mutex> lock(g_mutex);
         g_input.clear();
         g_rx_queue.clear();
         g_data_ready_callback = nullptr;
+        g_line_baud = 0;
+        g_line_config = 0;
+        g_line_config_callback = nullptr;
     }
 }

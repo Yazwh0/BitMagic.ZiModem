@@ -18,11 +18,13 @@
  #else
  # define ZIMODEM_ESP8266
  # undef INCLUDE_SSH
-@@ -161,6 +172,34 @@
+@@ -161,6 +172,36 @@
  //# define echoEOLN serial.write
  //# define HARD_DCD_HIGH 1
  //# define HARD_DCD_LOW 1
 +#elif defined(ZIMODEM_HOST)
++# undef DEFAULT_BAUD_RATE
++# define DEFAULT_BAUD_RATE 115200   // match the Commander X16 I/O card (INCLUDE_CMDRX16), confirmed on hardware
 +# define DEFAULT_PIN_DSR 5
 +# define DEFAULT_PIN_DTR 6
 +# define DEFAULT_PIN_RI 7

@@ -34,6 +34,7 @@ public sealed class ZiModemDevice : IDisposable
     private readonly NativeMethods.SerialOutCallback _onSerialOutNative;
     private readonly NativeMethods.SignalCallback _onSignalNative;
     private readonly NativeMethods.LogCallback _onLogNative;
+    private readonly NativeMethods.LineConfigCallback _onLineConfigNative;
 
     private bool _started;
     private bool _disposed;
@@ -41,6 +42,13 @@ public sealed class ZiModemDevice : IDisposable
     public event EventHandler<SerialDataEventArgs>? SerialDataReceived;
     public event EventHandler<SignalChangedEventArgs>? SignalChanged;
     public event EventHandler<ZiModemLogEventArgs>? Log;
+
+    /// <summary>
+    /// Raised when the firmware changes the serial line settings (baud / data bits /
+    /// parity / stop bits) -- an AT config, an ATSxx write, or the power-on default.
+    /// Fires on the native background thread; see the type-level remarks.
+    /// </summary>
+    public event EventHandler<ZiModemLineConfigChangedEventArgs>? LineConfigChanged;
 
     /// <param name="dataDir">
     /// Host directory the emulated SPIFFS filesystem (config, phonebook, logs) is rooted
@@ -68,7 +76,9 @@ public sealed class ZiModemDevice : IDisposable
         _onSerialOutNative = OnSerialOutNative;
         _onSignalNative = OnSignalNative;
         _onLogNative = OnLogNative;
-        NativeMethods.zimodem_host_set_callbacks(_handle, _onSerialOutNative, _onSignalNative, _onLogNative, 0);
+        _onLineConfigNative = OnLineConfigNative;
+        NativeMethods.zimodem_host_set_callbacks(
+            _handle, _onSerialOutNative, _onSignalNative, _onLogNative, _onLineConfigNative, 0);
     }
 
     /// <summary>Starts the background thread: runs the vendored sketch's setup() once, then loop() repeatedly.</summary>
@@ -108,6 +118,22 @@ public sealed class ZiModemDevice : IDisposable
         NativeMethods.zimodem_host_set_pin(_handle, (int)pin, (int)state);
     }
 
+    /// <summary>
+    /// The modem's current serial line settings (baud rate, data bits, parity, stop
+    /// bits), as last applied by the vendored firmware -- its power-on default or a
+    /// later AT / ATSxx change. Intended for a UART emulation to verify its own divisor
+    /// and framing match the modem's; a mismatch is what garbles data on real hardware.
+    /// <see cref="ZiModemLineConfig.IsConfigured"/> is false until the firmware's
+    /// background setup() has run. Thread-safe.
+    /// </summary>
+    public ZiModemLineConfig GetLineConfig()
+    {
+        ThrowIfDisposed();
+        NativeMethods.zimodem_host_get_line_config(
+            _handle, out int baud, out int dataBits, out int parity, out int stopBitsX10);
+        return new ZiModemLineConfig(baud, dataBits, (ZiModemParity)parity, stopBitsX10);
+    }
+
     private void OnSerialOutNative(nint userContext)
     {
         // Payload-less notification -- drain the native RX queue ourselves via the poll
@@ -134,6 +160,13 @@ public sealed class ZiModemDevice : IDisposable
     {
         string text = Marshal.PtrToStringAnsi(message) ?? string.Empty;
         Log?.Invoke(this, new ZiModemLogEventArgs(text));
+    }
+
+    private void OnLineConfigNative(nint userContext, int baud, int dataBits, int parity, int stopBitsX10)
+    {
+        LineConfigChanged?.Invoke(
+            this, new ZiModemLineConfigChangedEventArgs(
+                new ZiModemLineConfig(baud, dataBits, (ZiModemParity)parity, stopBitsX10)));
     }
 
     private void ThrowIfDisposed()
