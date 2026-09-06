@@ -467,7 +467,8 @@ what that means feature-by-feature versus firmware running on a real ESP32 I/O c
 | Area | Real ESP32 | Host build |
 |---|---|---|
 | Boot banner (`showInitMessage`) | `Zimodem ESP32 …` | `ZiModem BitMagic …` (patch 0012) |
-| `ATI` chip/flash/heap fields | Live `ESP.getChipRevision()` / `SPIFFS.totalBytes()` / real heap | `ESP.h` placeholder constants; SPIFFS size is the backing host directory |
+| `ATI` `sdk=` field (`ESP.getSdkVersion()`) | The ESP-IDF version the firmware was built against, e.g. `v4.4.7-dirty` (Espressif's FreeRTOS + WiFi/BT + driver framework under the Arduino core) | Fixed literal `"zimodem-host"` from `ESP.h` — there is no Espressif SDK on a PC. Distinct from the `Firmware v4.0.2` line, which is `ZIMODEM_VERSION` (the ZiModem app version) and *is* real. |
+| `ATI` chip/flash/heap fields (`getChipRevision`/`getFlashChipId`/`getFreeHeap`/`getSketchSize`) | Live values | `ESP.h` placeholder constants (`chipid=0`, `cpu@240`, heap `0`, …); SPIFFS size is the backing host directory |
 | **TLS versions** | Whatever the ESP32 core's mbedTLS offers (incl. TLS 1.3) | mbedTLS **2.28 LTS → TLS 1.2 ceiling** (chosen so the bundled build needs no Python codegen / git submodules — see `native/CMakeLists.txt`). Fine for BBS/telnet-over-TLS and typical HTTPS; a TLS-1.3-only server would fail. |
 | **TLS peer verification** | Also `setInsecure()` in this code path (no verification either) | Same: `TlsSocket` is unconditionally non-verifying. Encryption + SNI, no authentication. |
 | Serial flow control / TX buffering (`serout.*`) | ESP32 hardware-UART FIFO model, `uart_set_hw_flow_ctrl` IDF calls, `SER_BUFSIZE 0x7F` | ESP8266-shaped software model against `availableForWrite()` — the better fit for a virtual UART (§7.3) |
