@@ -1,0 +1,20 @@
+--- a/zimodem/zcommand.ino
++++ b/zimodem/zcommand.ino
+@@ -3562,10 +3562,11 @@
+   int totalSPIFFSSize = info.totalBytes;
+ #endif
+-  serial.prints("Zimodem ");
+-#ifdef ZIMODEM_ESP32
+-  serial.prints("ESP32 ");
+-#else
+-  serial.prints("ESP8266 ");
+-#endif
++#if defined(ZIMODEM_HOST)
++  serial.prints("ZiModem BitMagic ");
++#elif defined(ZIMODEM_ESP32)
++  serial.prints("Zimodem ESP32 ");
++#else
++  serial.prints("Zimodem ESP8266 ");
++#endif
+   serial.prints("Firmware v");
+   HWSerial.setTimeout(60000);

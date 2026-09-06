@@ -9,6 +9,7 @@ add_executable(zimodem_hal_tests
     test_ipaddress.cpp
     test_fs.cpp
     test_net.cpp
+    test_tls.cpp
     test_wifi.cpp
     test_serial.cpp
 )

@@ -6,6 +6,7 @@ add_library(zimodem_hal STATIC
     src/arduino_globals.cpp
     src/arduino_fs.cpp
     src/net.cpp
+    src/tls.cpp
     src/serial_port.cpp
 )
 
@@ -21,6 +22,12 @@ target_include_directories(zimodem_hal PUBLIC
 if(WIN32)
     target_link_libraries(zimodem_hal PUBLIC ws2_32)
 endif()
+
+# src/tls.cpp only -- mbedTLS headers are hidden behind TlsSocket's pimpl, so this stays
+# PRIVATE and nothing downstream (zimodem_core / the sketch TU) sees an mbedTLS include.
+# CMake still propagates it as a link-only dependency to the final executables/DLL
+# because zimodem_hal is a static library.
+target_link_libraries(zimodem_hal PRIVATE mbedtls)
 
 if(ZIMODEM_BUILD_TESTS)
     add_subdirectory(tests)

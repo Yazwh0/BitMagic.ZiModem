@@ -1,0 +1,11 @@
+--- a/zimodem/zimodem.ino
++++ b/zimodem/zimodem.ino
+@@ -31,6 +31,6 @@
+ #define INCLUDE_OTH_UPDATES true // comment out if you make incompatible firmware
+ //#define INCLUDE_SLIP true  // enable this when it is working.  it is not working.
+ //#define SUPPORT_LED_PINS true // enable if you have the spare gpio pins and leds
+-//#define INCLUDE_CMDRX16 true // enable this if you are David or Kevin
++#define INCLUDE_CMDRX16 true // enable this if you are David or Kevin
+ //#define USE_DEVUPDATER true // only enable this if your name is Bo
+
+ // Figure out whether we are building for ESP8266 or ESP32

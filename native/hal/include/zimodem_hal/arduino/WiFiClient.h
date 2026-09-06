@@ -31,10 +31,15 @@ public:
     {
     }
 
-    int connect(const char* host, uint16_t port) { return socket_->connect(host ? host : "", port) ? 1 : 0; }
-    int connect(IPAddress ip, uint16_t port) { return connect(ip.toString().c_str(), port); }
+    // These are virtual because WiFiClientSecure (zimodem_hal/arduino/WiFiClientSecure.h)
+    // overrides every one of them, and the vendored sketch drives a WiFiClientSecure
+    // instance through a WiFiClient* (WiFiClientNode::clientPtr) -- so the TLS overrides
+    // only get picked up if dispatch here is virtual. available()/read()/peek()/write()/
+    // flush() are already virtual via Stream/Print.
+    virtual int connect(const char* host, uint16_t port) { return socket_->connect(host ? host : "", port) ? 1 : 0; }
+    virtual int connect(IPAddress ip, uint16_t port) { return connect(ip.toString().c_str(), port); }
 
-    int connected() { return socket_->connected() ? 1 : 0; }
+    virtual int connected() { return socket_->connected() ? 1 : 0; }
 
     int available() override { return socket_->available(); }
     int read() override
@@ -42,7 +47,7 @@ public:
         uint8_t b;
         return socket_->read(&b, 1) == 1 ? b : -1;
     }
-    int read(uint8_t* buf, size_t size) { return socket_->read(buf, size); }
+    virtual int read(uint8_t* buf, size_t size) { return socket_->read(buf, size); }
     int peek() override { return socket_->peek_byte(); }
 
     size_t write(uint8_t b) override { return socket_->write(&b, 1); }
@@ -50,11 +55,11 @@ public:
     using Print::write;
 
     void flush() override { socket_->flush(); }
-    void setNoDelay(bool nodelay) { socket_->set_no_delay(nodelay); }
-    void stop() { socket_->close(); }
+    virtual void setNoDelay(bool nodelay) { socket_->set_no_delay(nodelay); }
+    virtual void stop() { socket_->close(); }
 
-    uint16_t localPort() { return socket_->local_port(); }
-    IPAddress remoteIP() { return IPAddress(socket_->remote_ip()); }
+    virtual uint16_t localPort() { return socket_->local_port(); }
+    virtual IPAddress remoteIP() { return IPAddress(socket_->remote_ip()); }
 
 private:
     std::shared_ptr<zimodem_hal::net::TcpSocket> socket_;

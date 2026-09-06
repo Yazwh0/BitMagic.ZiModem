@@ -48,3 +48,28 @@
 # nothing observable, just makes the "must override" intent explicit enough for a
 # stricter linker.
 0009-zmode-pure-virtual.patch
+
+# Uncomments the upstream `//#define INCLUDE_CMDRX16 true` line so the Commander X16
+# I/O card configuration block (the `#ifdef INCLUDE_CMDRX16` ladder further down
+# zimodem.ino) is compiled in for the host build. Upstream ships it commented out
+# because it is board-specific ("enable this if you are David or Kevin"); for this
+# project the X16 I/O card is the target, so it is always on. Pure configuration
+# toggle of an existing upstream option, no code change.
+0010-zimodem-enable-cmdrx16.patch
+
+# Routes the ZIMODEM_HOST build into the same createWiFiClient() code path the ESP32
+# build uses when a secure connection is requested (FLAG_SECURE / https:// URLs), by
+# widening two `#ifdef ZIMODEM_ESP32` guards in wificlientnode.h to
+# `#if defined(ZIMODEM_ESP32) || defined(ZIMODEM_HOST)`. Same shape as patch 0002
+# (adds a host arm to an existing upstream ladder, reuses the existing ESP32 body
+# verbatim). Backed by a real HAL WiFiClientSecure (native/hal, mbedTLS); without this
+# patch the host build silently returns a plaintext WiFiClient for secure dials, the
+# ESP8266 fallback behaviour.
+0011-wificlient-host-tls.patch
+
+# showInitMessage()'s banner is a two-way `#ifdef ZIMODEM_ESP32` / `#else` split that
+# can only print "ESP32" or "ESP8266"; the host build is ZIMODEM_HOST (neither) and
+# falls through to "ESP8266", which is misleading. Adds a ZIMODEM_HOST arm printing
+# "ZiModem BitMagic " so the running firmware identifies itself unambiguously. Cosmetic
+# (diagnostic string only); the ESP32/ESP8266 arms are unchanged in behaviour.
+0012-banner-bitmagic.patch

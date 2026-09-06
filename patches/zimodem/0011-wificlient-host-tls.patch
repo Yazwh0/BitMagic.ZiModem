@@ -1,0 +1,22 @@
+--- a/zimodem/wificlientnode.h
++++ b/zimodem/wificlientnode.h
+@@ -16,9 +16,9 @@
+
+ #define PACKET_BUF_SIZE 256
+
+-#ifdef ZIMODEM_ESP32
++#if defined(ZIMODEM_ESP32) || defined(ZIMODEM_HOST)
+ # include <WiFiClientSecure.h>
+ #endif
+ #ifdef INCLUDE_SSH
+ # include "wifisshclient.h"
+ #endif
+@@ -25,7 +25,7 @@
+
+ static WiFiClient *createWiFiClient(bool SSL)
+ {
+-#ifdef ZIMODEM_ESP32
++#if defined(ZIMODEM_ESP32) || defined(ZIMODEM_HOST)
+   if(SSL)
+   {
+     WiFiClientSecure *c = new WiFiClientSecure();

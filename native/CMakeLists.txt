@@ -94,6 +94,39 @@ if(ZIMODEM_BUILD_TESTS)
     FetchContent_MakeAvailable(Catch2)
 endif()
 
+# --- mbedTLS (bundled) -------------------------------------------------------
+# Backs zimodem_hal's TlsSocket / the Arduino WiFiClientSecure shim. The vendored sketch
+# asks for a TLS client whenever it dials a secure host (FLAG_SECURE, https:// URLs);
+# patches/zimodem/0011 routes the ZIMODEM_HOST build into the same createWiFiClient()
+# path the ESP32 firmware uses. Fetched and static-linked (rather than depending on a
+# system TLS library) so the Windows and Linux builds are byte-for-byte the same shape
+# and zimodem_host.dll keeps the "no external runtime deps" property that
+# CMAKE_MSVC_RUNTIME_LIBRARY above is also protecting.
+#
+# Pinned to the 2.28 LTS line on purpose: its CMake build needs no Python/Jinja code
+# generation step (GEN_FILES defaults OFF, generated sources are committed) and has no
+# `framework` git submodule, so a plain shallow FetchContent clone builds cleanly on a
+# machine with neither Python nor submodule fetching. Trade-off: TLS 1.2 is the ceiling
+# (no TLS 1.3) -- fine for dialling BBS/telnet-over-TLS and typical HTTPS. See
+# docs/native-wrapper-spec.md "ESP32 parity".
+include(FetchContent)
+set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+set(GEN_FILES OFF CACHE BOOL "" FORCE)
+# mbedTLS 2.28's top-level cmake_minimum_required() predates CMake 3.5, which CMake 4.x
+# refuses outright (only warns on 3.x). This lets the bundled build configure under a
+# 4.x CMake without editing vendored files; harmless on older CMake.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+FetchContent_Declare(
+    MbedTLS
+    GIT_REPOSITORY https://github.com/Mbed-TLS/mbedtls.git
+    GIT_TAG v2.28.10
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(MbedTLS)
+unset(CMAKE_POLICY_VERSION_MINIMUM)
+
 add_subdirectory(hal)
 
 add_subdirectory(wrapper)
