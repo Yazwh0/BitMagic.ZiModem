@@ -134,7 +134,7 @@ namespace
     }
 }
 
-zimodem_handle zimodem_host_create(const zimodem_host_config* cfg)
+zimodem_handle ZIMODEM_ABI zimodem_host_create(const zimodem_host_config* cfg)
 {
     // A library has no business silently choosing a filesystem location on the
     // caller's behalf -- see zimodem_host.h's comment on zimodem_host_config::data_dir.
@@ -183,12 +183,12 @@ zimodem_handle zimodem_host_create(const zimodem_host_config* cfg)
     return reinterpret_cast<zimodem_handle>(inst);
 }
 
-void zimodem_host_set_callbacks(zimodem_handle h,
-                                 zimodem_serial_out_cb on_serial_out,
-                                 zimodem_signal_cb on_signal,
-                                 zimodem_log_cb on_log,
-                                 zimodem_line_config_cb on_line_config,
-                                 void* user_context)
+void ZIMODEM_ABI zimodem_host_set_callbacks(zimodem_handle h,
+                                            zimodem_serial_out_cb on_serial_out,
+                                            zimodem_signal_cb on_signal,
+                                            zimodem_log_cb on_log,
+                                            zimodem_line_config_cb on_line_config,
+                                            void* user_context)
 {
     auto* inst = reinterpret_cast<zimodem_instance*>(h);
     if (inst == nullptr)
@@ -201,7 +201,7 @@ void zimodem_host_set_callbacks(zimodem_handle h,
     inst->user_context = user_context;
 }
 
-int zimodem_host_start(zimodem_handle h)
+int ZIMODEM_ABI zimodem_host_start(zimodem_handle h)
 {
     auto* inst = reinterpret_cast<zimodem_instance*>(h);
     if (inst == nullptr)
@@ -213,7 +213,7 @@ int zimodem_host_start(zimodem_handle h)
     return 0;
 }
 
-int zimodem_host_write_serial(zimodem_handle h, const uint8_t* data, size_t len)
+int ZIMODEM_ABI zimodem_host_write_serial(zimodem_handle h, const uint8_t* data, size_t len)
 {
     auto* inst = reinterpret_cast<zimodem_instance*>(h);
     if (inst == nullptr)
@@ -222,7 +222,7 @@ int zimodem_host_write_serial(zimodem_handle h, const uint8_t* data, size_t len)
     return 0;
 }
 
-int zimodem_host_rx_available(zimodem_handle h)
+int ZIMODEM_ABI zimodem_host_rx_available(zimodem_handle h)
 {
     auto* inst = reinterpret_cast<zimodem_instance*>(h);
     if (inst == nullptr)
@@ -230,7 +230,7 @@ int zimodem_host_rx_available(zimodem_handle h)
     return zimodem_hal::serial::rx_available() ? 1 : 0;
 }
 
-int zimodem_host_rx_read(zimodem_handle h)
+int ZIMODEM_ABI zimodem_host_rx_read(zimodem_handle h)
 {
     auto* inst = reinterpret_cast<zimodem_instance*>(h);
     if (inst == nullptr)
@@ -238,7 +238,7 @@ int zimodem_host_rx_read(zimodem_handle h)
     return zimodem_hal::serial::rx_read();
 }
 
-void zimodem_host_set_pin(zimodem_handle h, int pin, int value)
+void ZIMODEM_ABI zimodem_host_set_pin(zimodem_handle h, int pin, int value)
 {
     auto* inst = reinterpret_cast<zimodem_instance*>(h);
     if (inst == nullptr)
@@ -246,8 +246,8 @@ void zimodem_host_set_pin(zimodem_handle h, int pin, int value)
     zimodem_hal::pins::digital_write(pin, value);
 }
 
-void zimodem_host_get_line_config(zimodem_handle h, int* out_baud, int* out_data_bits,
-                                  int* out_parity, int* out_stop_bits_x10)
+void ZIMODEM_ABI zimodem_host_get_line_config(zimodem_handle h, int* out_baud, int* out_data_bits,
+                                             int* out_parity, int* out_stop_bits_x10)
 {
     // Always define every out param (a C# `out` caller has no other initialiser).
     if (out_baud != nullptr)          *out_baud = 0;
@@ -268,7 +268,7 @@ void zimodem_host_get_line_config(zimodem_handle h, int* out_baud, int* out_data
     decode_serial_config(config, out_data_bits, out_parity, out_stop_bits_x10);
 }
 
-void zimodem_host_destroy(zimodem_handle h)
+void ZIMODEM_ABI zimodem_host_destroy(zimodem_handle h)
 {
     auto* inst = reinterpret_cast<zimodem_instance*>(h);
     if (inst == nullptr)

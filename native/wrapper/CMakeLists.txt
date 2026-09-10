@@ -26,6 +26,13 @@ target_include_directories(zimodem_host PUBLIC
 
 target_link_libraries(zimodem_host PRIVATE zimodem_core zimodem_hal)
 
+# PRIVATE, not PUBLIC: only zimodem_host.cpp's own translation unit switches convention.
+# Consumers linking this target (the tests) are meant to keep the platform default -- and
+# the top-level CMakeLists forbids ZIMODEM_HOST_MSABI + ZIMODEM_BUILD_TESTS together.
+if(ZIMODEM_HOST_MSABI)
+    target_compile_definitions(zimodem_host PRIVATE ZIMODEM_HOST_MSABI=1)
+endif()
+
 if(ZIMODEM_BUILD_TESTS)
     add_subdirectory(tests)
 endif()

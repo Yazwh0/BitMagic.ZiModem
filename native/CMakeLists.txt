@@ -36,6 +36,20 @@ get_filename_component(ZIMODEM_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLU
 
 option(ZIMODEM_BUILD_TESTS "Build the HAL/wrapper unit test suites" ON)
 
+# Force the MS x64 calling convention onto the public C ABI + callback pointers (see the
+# ZIMODEM_ABI macro in wrapper/include/zimodem_host.h). OFF by default: the SysV build is
+# what ordinary consumers need, including managed/ZiModem.Net and the Catch2 suites. ON
+# only for a dedicated build feeding BitMagic's emulator core, whose MASM call sites are
+# Windows-convention on every platform. No effect off x86-64 Linux.
+option(ZIMODEM_HOST_MSABI "Compile the public ABI with __attribute__((ms_abi)) (x86-64 Linux only; for the BitMagic emulator core)" OFF)
+
+if(ZIMODEM_HOST_MSABI AND ZIMODEM_BUILD_TESTS)
+    message(FATAL_ERROR
+        "ZIMODEM_HOST_MSABI is incompatible with ZIMODEM_BUILD_TESTS: the test suites "
+        "call the ABI with the platform-default (SysV) convention. Configure the MSABI "
+        "build with -DZIMODEM_BUILD_TESTS=OFF.")
+endif()
+
 # --- Vendoring -----------------------------------------------------------
 # Regenerates build/vendor/zimodem-src from external/zimodem + patches/zimodem, but only
 # when one of those inputs actually changed. See docs/native-wrapper-spec.md section 6.

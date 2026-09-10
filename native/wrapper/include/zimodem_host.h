@@ -35,6 +35,30 @@ extern "C" {
 # define ZIMODEM_API __attribute__((visibility("default")))
 #endif
 
+// Calling convention for every function that crosses this ABI -- the public entry points
+// below AND the callback function pointers (which the library invokes indirectly).
+//
+// Empty (the platform default) everywhere except an x86-64 Linux build explicitly
+// compiled with -DZIMODEM_HOST_MSABI. That opt-in exists for one specific consumer:
+// BitMagic's emulator core, which is hand-written x64 MASM that only knows the Windows
+// convention (args in RCX/RDX/R8/R9, 32-byte shadow space, RSP 16-aligned) and is the
+// same object file on Windows and Linux. On x86-64 Linux the platform default is System
+// V (args in RDI/RSI/RDX/RCX/R8/R9, no shadow space), so without this the MASM call
+// sites would pass garbage. __attribute__((ms_abi)) forces the Windows convention on the
+// boundary functions and the callback pointers so neither direction needs a shim; the
+// library's own internals stay System V.
+//
+// It is a compile-time switch, NOT unconditional on Linux, because the default SysV
+// build is what every ordinary consumer needs -- notably managed/ZiModem.Net, whose
+// P/Invoke layer on Linux x64 can only issue SysV calls, and the native Catch2 test
+// suites. A given libzimodem_host.so is one convention or the other; build a dedicated
+// copy with -DZIMODEM_HOST_MSABI for the emulator core.
+#if defined(ZIMODEM_HOST_MSABI) && defined(__linux__) && defined(__x86_64__)
+# define ZIMODEM_ABI __attribute__((ms_abi))
+#else
+# define ZIMODEM_ABI
+#endif
+
 typedef struct zimodem_instance* zimodem_handle;
 
 // Pin numbers for zimodem_host_set_pin/zimodem_signal_cb -- mirrors the DEFAULT_PIN_*
@@ -86,42 +110,42 @@ typedef struct zimodem_host_config
 // default being applied -- and NOT for a redundant re-apply of the current settings.
 // Its argument layout matches zimodem_host_get_line_config's outparams (parity is a
 // ZIMODEM_PARITY_* value; stop_bits_x10 is stop bits times ten).
-typedef void (*zimodem_serial_out_cb)(void* user_context);
-typedef void (*zimodem_signal_cb)(void* user_context, int pin, int active);
-typedef void (*zimodem_log_cb)(void* user_context, const char* message);
-typedef void (*zimodem_line_config_cb)(void* user_context,
+typedef void (ZIMODEM_ABI *zimodem_serial_out_cb)(void* user_context);
+typedef void (ZIMODEM_ABI *zimodem_signal_cb)(void* user_context, int pin, int active);
+typedef void (ZIMODEM_ABI *zimodem_log_cb)(void* user_context, const char* message);
+typedef void (ZIMODEM_ABI *zimodem_line_config_cb)(void* user_context,
                                        int baud, int data_bits, int parity, int stop_bits_x10);
 
 // Allocates an instance and configures the data directory. Does not start the background
 // thread. Returns NULL if cfg is NULL or cfg->data_dir is NULL/empty, if an instance
 // already exists in this process (see the note above), or if allocation fails.
-ZIMODEM_API zimodem_handle zimodem_host_create(const zimodem_host_config* cfg);
+ZIMODEM_API zimodem_handle ZIMODEM_ABI zimodem_host_create(const zimodem_host_config* cfg);
 
 // Registers callbacks, replacing any previously registered ones. Call this before
 // zimodem_host_start() to avoid missing early output. Any of the callback pointers may
 // be NULL to stop receiving that kind of event.
-ZIMODEM_API void zimodem_host_set_callbacks(zimodem_handle h,
-                                             zimodem_serial_out_cb on_serial_out,
-                                             zimodem_signal_cb on_signal,
-                                             zimodem_log_cb on_log,
-                                             zimodem_line_config_cb on_line_config,
-                                             void* user_context);
+ZIMODEM_API void ZIMODEM_ABI zimodem_host_set_callbacks(zimodem_handle h,
+                                                       zimodem_serial_out_cb on_serial_out,
+                                                       zimodem_signal_cb on_signal,
+                                                       zimodem_log_cb on_log,
+                                                       zimodem_line_config_cb on_line_config,
+                                                       void* user_context);
 
 // Starts the background thread: runs the vendored sketch's setup() once, then loop()
 // repeatedly until zimodem_host_destroy(). Returns 0 on success, non-zero if h is
 // invalid or already started.
-ZIMODEM_API int zimodem_host_start(zimodem_handle h);
+ZIMODEM_API int ZIMODEM_ABI zimodem_host_start(zimodem_handle h);
 
 // Host -> modem. Thread-safe and non-blocking: enqueues bytes for the background
 // thread's next loop() iteration to consume. Returns 0 on success, non-zero if h is
 // invalid.
-ZIMODEM_API int zimodem_host_write_serial(zimodem_handle h, const uint8_t* data, size_t len);
+ZIMODEM_API int ZIMODEM_ABI zimodem_host_write_serial(zimodem_handle h, const uint8_t* data, size_t len);
 
 // Modem -> host, poll side. zimodem_host_rx_available() returns non-zero if a byte is
 // waiting; zimodem_host_rx_read() dequeues and returns it (-1 if empty, or if h is
 // invalid). Both are thread-safe and callable from any thread, at any time.
-ZIMODEM_API int zimodem_host_rx_available(zimodem_handle h);
-ZIMODEM_API int zimodem_host_rx_read(zimodem_handle h);
+ZIMODEM_API int ZIMODEM_ABI zimodem_host_rx_available(zimodem_handle h);
+ZIMODEM_API int ZIMODEM_ABI zimodem_host_rx_read(zimodem_handle h);
 
 // Host -> modem pin write (the reverse of zimodem_signal_cb, which is modem -> host
 // only) -- e.g. drive ZIMODEM_PIN_CTS to ZIMODEM_PIN_INACTIVE to tell the modem to hold
@@ -134,7 +158,7 @@ ZIMODEM_API int zimodem_host_rx_read(zimodem_handle h);
 // firmware's background thread in a busy-wait once its own internal buffer fills, with
 // no timeout, until CTS goes active again; leaving it inactive forever hangs the modem.
 // Thread-safe: safe to call from any thread, at any time. A no-op if h is invalid.
-ZIMODEM_API void zimodem_host_set_pin(zimodem_handle h, int pin, int value);
+ZIMODEM_API void ZIMODEM_ABI zimodem_host_set_pin(zimodem_handle h, int pin, int value);
 
 // Parity values reported by zimodem_host_get_line_config()'s out_parity.
 #define ZIMODEM_PARITY_NONE 0
@@ -155,16 +179,16 @@ ZIMODEM_API void zimodem_host_set_pin(zimodem_handle h, int pin, int value);
 //   out_stop_bits_x10 - stop bits times ten: 10 (one), 15 (one and a half), or 20 (two)
 //
 // Thread-safe: safe to call from any thread, at any time.
-ZIMODEM_API void zimodem_host_get_line_config(zimodem_handle h,
-                                              int* out_baud,
-                                              int* out_data_bits,
-                                              int* out_parity,
-                                              int* out_stop_bits_x10);
+ZIMODEM_API void ZIMODEM_ABI zimodem_host_get_line_config(zimodem_handle h,
+                                                         int* out_baud,
+                                                         int* out_data_bits,
+                                                         int* out_parity,
+                                                         int* out_stop_bits_x10);
 
 // Stops the background thread (if started) and joins it, then frees the instance. h is
 // invalid after this call. Safe to call from any thread other than the background
 // thread itself; blocks until that thread exits.
-ZIMODEM_API void zimodem_host_destroy(zimodem_handle h);
+ZIMODEM_API void ZIMODEM_ABI zimodem_host_destroy(zimodem_handle h);
 
 #ifdef __cplusplus
 }
