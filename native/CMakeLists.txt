@@ -84,6 +84,26 @@ add_custom_target(zimodem_vendor ALL DEPENDS "${ZIMODEM_VENDOR_STAMP}")
 set(ZIMODEM_VENDOR_DIR "${ZIMODEM_REPO_ROOT}/build/vendor/zimodem-src" CACHE PATH
     "Location of the vendored+patched zimodem source tree" FORCE)
 
+# Eagerly vendor now, at configure time -- not only via the zimodem_vendor build-time
+# custom command above. The libssh2 target further below lists explicit vendored .c
+# paths as its SOURCES, and CMake validates every SOURCES path exists during the
+# Generate step, which runs before Ninja has ever executed that custom command. On a
+# clean checkout (e.g. CI) ${ZIMODEM_VENDOR_DIR} doesn't exist yet at that point, so
+# without this, configure fails with "Cannot find source file" / "No SOURCES given to
+# target: libssh2" even though the same build works on a machine where build/vendor
+# already exists from an earlier run. Idempotent -- tools/Vendoring vendor is safe to
+# re-run; the custom command below still re-vendors on later incremental Ninja builds
+# when inputs change (CONFIGURE_DEPENDS on ZIMODEM_VENDOR_INPUTS forces a reconfigure,
+# and thus reruns this too, on the same trigger).
+execute_process(
+    COMMAND dotnet run --project "${ZIMODEM_REPO_ROOT}/tools/Vendoring" -- vendor
+    WORKING_DIRECTORY "${ZIMODEM_REPO_ROOT}"
+    RESULT_VARIABLE ZIMODEM_VENDOR_EAGER_RESULT
+)
+if(NOT ZIMODEM_VENDOR_EAGER_RESULT EQUAL 0)
+    message(FATAL_ERROR "Initial zimodem vendoring failed (exit code ${ZIMODEM_VENDOR_EAGER_RESULT})")
+endif()
+
 # Must come before any add_subdirectory() containing tests -- CTest only picks up
 # add_test()/catch_discover_tests() registrations made in a scope where enable_testing()
 # has already run in that directory or an ancestor.
