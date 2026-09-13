@@ -39,7 +39,18 @@ public:
     virtual int connect(const char* host, uint16_t port) { return socket_->connect(host ? host : "", port) ? 1 : 0; }
     virtual int connect(IPAddress ip, uint16_t port) { return connect(ip.toString().c_str(), port); }
 
-    virtual int connected() { return socket_->connected() ? 1 : 0; }
+    // Timeout-taking overloads and fd() exist solely so WiFiSSHClient (wifisshclient.h,
+    // INCLUDE_SSH) can override them through this same WiFiClient* polymorphism already
+    // established for WiFiClientSecure -- grepped: nothing else in the vendored sketch
+    // calls either polymorphically, so these trivial bodies are the only ones ever used.
+    virtual int connect(const char* host, uint16_t port, int32_t /*timeout_ms*/) { return connect(host, port); }
+    virtual int connect(IPAddress ip, uint16_t port, int32_t /*timeout_ms*/) { return connect(ip, port); }
+    virtual int fd() const { return -1; }
+
+    // uint8_t, not int: real Arduino's Client::connected() returns uint8_t, and
+    // WiFiSSHClient (INCLUDE_SSH) overrides this -- C++ virtual overrides require an
+    // identical (non-covariant for non-class types) return type, so this has to match.
+    virtual uint8_t connected() { return socket_->connected() ? 1 : 0; }
 
     int available() override { return socket_->available(); }
     int read() override

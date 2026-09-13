@@ -73,3 +73,48 @@
 # "ZiModem BitMagic " so the running firmware identifies itself unambiguously. Cosmetic
 # (diagnostic string only); the ESP32/ESP8266 arms are unchanged in behaviour.
 0012-banner-bitmagic.patch
+
+# Every one of the 39 files under zimodem/src/libssh2/ (the vendored libssh2 client
+# library backing WiFiSSHClient/INCLUDE_SSH) is wrapped top-to-bottom in a single
+# `#if defined(ESP32) ... #endif`, so none of it compiles on any non-ESP32 target today.
+# Widens each file's opening guard to `#if defined(ESP32) || defined(ZIMODEM_HOST)` --
+# same idiom as 0002/0011 widening an existing upstream ESP32-only branch for the host
+# build -- so libssh2 compiles here too. Deliberately NOT done via a blanket `#define
+# ESP32`: zimodem.ino's own board-detection ladder treats bare `#elif defined(ESP32)` as
+# a trigger for ZIMODEM_ESP32, which would incorrectly also enable real hardware-setup
+# code elsewhere. Mechanical, one-line-per-file change; nothing inside these files is
+# otherwise touched.
+0013-libssh2-host-guards.patch
+
+# libssh2_config.h (widened by 0013 above) unconditionally #defines 8 POSIX-only feature
+# macros (HAVE_UNISTD_H, HAVE_SYS_SOCKET_H, HAVE_STRCASECMP, etc.) inside its ESP32/host
+# guard. Upstream libssh2.h/libssh2_priv.h (untouched, not ESP32-specific) already have
+# complete, correct native Windows support gated on `_MSC_VER`/`WIN32` -- these 8 macros
+# just need to stop being falsely defined on Windows so that support activates. Excluding
+# HAVE_STRCASECMP on _WIN32 also activates an existing dead fallback in this same file
+# (`#define strcasecmp _stricmp`) for free. Linux/ESP32 behaviour is unchanged (macros
+# stay defined there).
+0014-libssh2-config-windows.patch
+
+# Removes the `# undef INCLUDE_SSH` line from patch 0001's own ZIMODEM_HOST_BUILD branch
+# in zimodem.ino, re-enabling libssh2/WiFiSSHClient support for the host build now that
+# 0013/0014 make it actually compile. A dedicated patch, not an edit to 0001 itself --
+# same precedent as 0010 re-enabling INCLUDE_CMDRX16 -- so this one flag is independently
+# revertable. INCLUDE_HOSTCM/COMET64/CBMMODEM/SLIP/PPP/PING/OTH_UPDATES stay undef'd.
+0015-zimodem-enable-ssh.patch
+
+# wifisshclient.ino has three real portability bugs (not ESP32-vs-host feature gaps):
+# closeSSH()'s close(sock) is POSIX-only (needs closesocket() on Windows);
+# connect(IPAddress,uint16_t)'s success path falls off the end with no return statement
+# (GCC/ESP32 tolerates it, MSVC will not); and it calls the arduino-esp32-only static
+# WiFiGenericClass::hostByName(), which the host WiFi.h shim doesn't have (only the
+# instance method WiFi.hostByName(), already used correctly elsewhere e.g. rt_clock.ino).
+# All three found by reading the function bodies in full, not guessed.
+0016-wifisshclient-host-portability.patch
+
+# libssh2.h's own WIN32 branch includes <winsock2.h> for SOCKET etc. but not
+# <ws2tcpip.h>, which is where this SDK's socklen_t typedef (used by
+# session.c's getsockopt()-based non-blocking-check fallback) actually lives. A missing
+# standard-header include, not an ESP32-vs-host gap -- found by attempting the build, same
+# as the HAVE_IOCTLSOCKET addition in 0014.
+0017-libssh2-socklen-windows.patch

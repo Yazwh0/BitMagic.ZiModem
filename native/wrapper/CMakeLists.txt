@@ -11,7 +11,7 @@ target_include_directories(zimodem_core PRIVATE
 
 target_compile_definitions(zimodem_core PRIVATE ZIMODEM_HOST_BUILD=1)
 
-target_link_libraries(zimodem_core PUBLIC zimodem_hal)
+target_link_libraries(zimodem_core PUBLIC zimodem_hal libssh2)
 
 add_dependencies(zimodem_core zimodem_vendor)
 

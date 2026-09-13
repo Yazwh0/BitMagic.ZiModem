@@ -1,0 +1,31 @@
+--- a/zimodem/wifisshclient.ino
++++ b/zimodem/wifisshclient.ino
+@@ -40,7 +40,11 @@
+       session = null;
+   }
+   if(sock) {
++#ifdef _WIN32
++    closesocket(sock);
++#else
+     close(sock);
++#endif
+     sock = null;
+   }
+ }
+@@ -108,6 +112,7 @@
+   if((err > 0) && (err != LIBSSH2_ERROR_EAGAIN)) {
+     ibufSz += err;
+   }
++  return true;
+ }
+ int WiFiSSHClient::connect(IPAddress ip, uint16_t port, int32_t timeout_ms)
+ {
+@@ -119,7 +124,7 @@
+   if(host == null)
+     return false;
+   IPAddress hostIp((uint32_t)0);
+-  if(!WiFiGenericClass::hostByName(host, hostIp))
++  if(!WiFi.hostByName(host, hostIp))
+     return false;
+   return connect(hostIp, port);
+ }

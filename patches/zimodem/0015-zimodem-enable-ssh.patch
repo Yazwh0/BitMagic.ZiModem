@@ -1,0 +1,10 @@
+--- a/zimodem/zimodem.ino
++++ b/zimodem/zimodem.ino
+@@ -53,7 +53,6 @@
+ # define ZIMODEM_ESP32
+ #elif defined(ZIMODEM_HOST_BUILD)
+ # define ZIMODEM_HOST
+-# undef INCLUDE_SSH
+ # undef INCLUDE_SD_SHELL
+ # undef INCLUDE_HOSTCM
+ # undef INCLUDE_COMET64

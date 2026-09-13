@@ -1,0 +1,29 @@
+--- a/zimodem/src/libssh2/libssh2_config.h
++++ b/zimodem/src/libssh2/libssh2_config.h
+@@ -37,18 +37,26 @@
+ 
+ /* Headers */
+ #define LIBSSH2_MBEDTLS
++#if !defined(_WIN32)
+ #define HAVE_O_NONBLOCK
+ #define HAVE_UNISTD_H
++#else
++#define HAVE_IOCTLSOCKET
++#endif
+ #define HAVE_INTTYPES_H
+ #define HAVE_STDLIB_H
++#if !defined(_WIN32)
+ #define HAVE_SYS_SELECT_H
+ #define HAVE_SYS_SOCKET_H
+ #define HAVE_SYS_TIME_H
+ #define HAVE_ARPA_INET_H
+ #define HAVE_NETINET_IN_H
++#endif
+ 
+ /* Functions */
++#if !defined(_WIN32)
+ #define HAVE_STRCASECMP
++#endif
+ #define HAVE__STRICMP
+ #define HAVE_SNPRINTF
+ #define HAVE__SNPRINTF

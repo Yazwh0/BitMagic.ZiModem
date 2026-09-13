@@ -41,7 +41,7 @@ public:
     }
     int connect(IPAddress ip, uint16_t port) override { return connect(ip.toString().c_str(), port); }
 
-    int connected() override { return tls_->connected() ? 1 : 0; }
+    uint8_t connected() override { return tls_->connected() ? 1 : 0; }
 
     int available() override { return tls_->available(); }
     int read() override

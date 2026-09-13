@@ -1,0 +1,234 @@
+--- a/zimodem/src/libssh2/agent.h
++++ b/zimodem/src/libssh2/agent.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ #ifndef __LIBSSH2_AGENT_H
+--- a/zimodem/src/libssh2/bcrypt_pbkdf.c
++++ b/zimodem/src/libssh2/bcrypt_pbkdf.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* $OpenBSD: bcrypt_pbkdf.c,v 1.4 2013/07/29 00:55:53 tedu Exp $ */
+--- a/zimodem/src/libssh2/blf.h
++++ b/zimodem/src/libssh2/blf.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ #ifndef __LIBSSH2_BLF_H
+--- a/zimodem/src/libssh2/blowfish.c
++++ b/zimodem/src/libssh2/blowfish.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* $OpenBSD: blowfish.c,v 1.18 2004/11/02 17:23:26 hshoexer Exp $ */
+--- a/zimodem/src/libssh2/channel.c
++++ b/zimodem/src/libssh2/channel.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2004-2007 Sara Golemon <sarag@libssh2.org>
+--- a/zimodem/src/libssh2/channel.h
++++ b/zimodem/src/libssh2/channel.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ #ifndef __LIBSSH2_CHANNEL_H
+--- a/zimodem/src/libssh2/comp.c
++++ b/zimodem/src/libssh2/comp.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2004-2007, 2019, Sara Golemon <sarag@libssh2.org>
+--- a/zimodem/src/libssh2/comp.h
++++ b/zimodem/src/libssh2/comp.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ #ifndef __LIBSSH2_COMP_H
+--- a/zimodem/src/libssh2/crypt.c
++++ b/zimodem/src/libssh2/crypt.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2009, 2010 Simon Josefsson <simon@josefsson.org>
+--- a/zimodem/src/libssh2/crypto.h
++++ b/zimodem/src/libssh2/crypto.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ #ifndef __LIBSSH2_CRYPTO_H
+--- a/zimodem/src/libssh2/global.c
++++ b/zimodem/src/libssh2/global.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2010 Lars Nordin <Lars.Nordin@SDlabs.se>
+--- a/zimodem/src/libssh2/hostkey.c
++++ b/zimodem/src/libssh2/hostkey.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2004-2006, Sara Golemon <sarag@libssh2.org>
+--- a/zimodem/src/libssh2/keepalive.c
++++ b/zimodem/src/libssh2/keepalive.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (C) 2010  Simon Josefsson
+--- a/zimodem/src/libssh2/kex.c
++++ b/zimodem/src/libssh2/kex.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2004-2007, Sara Golemon <sarag@libssh2.org>
+--- a/zimodem/src/libssh2/libgcrypt.h
++++ b/zimodem/src/libssh2/libgcrypt.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ #ifndef __LIBSSH2_LIBGCRYPT_H
+--- a/zimodem/src/libssh2/libssh2.h
++++ b/zimodem/src/libssh2/libssh2.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2004-2009, Sara Golemon <sarag@libssh2.org>
+--- a/zimodem/src/libssh2/libssh2_config.h
++++ b/zimodem/src/libssh2/libssh2_config.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2014 Alexander Lamaison <alexander.lamaison@gmail.com>
+--- a/zimodem/src/libssh2/libssh2_priv.h
++++ b/zimodem/src/libssh2/libssh2_priv.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ #ifndef __LIBSSH2_PRIV_H
+--- a/zimodem/src/libssh2/libssh2_publickey.h
++++ b/zimodem/src/libssh2/libssh2_publickey.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2004-2006, Sara Golemon <sarag@libssh2.org>
+--- a/zimodem/src/libssh2/libssh2_sftp.h
++++ b/zimodem/src/libssh2/libssh2_sftp.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2004-2008, Sara Golemon <sarag@libssh2.org>
+--- a/zimodem/src/libssh2/mac.c
++++ b/zimodem/src/libssh2/mac.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2004-2007, Sara Golemon <sarag@libssh2.org>
+--- a/zimodem/src/libssh2/mac.h
++++ b/zimodem/src/libssh2/mac.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ #ifndef __LIBSSH2_MAC_H
+--- a/zimodem/src/libssh2/mbedtls.c
++++ b/zimodem/src/libssh2/mbedtls.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2016, Art <https://github.com/wildart>
+--- a/zimodem/src/libssh2/mbedtls.h
++++ b/zimodem/src/libssh2/mbedtls.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ #ifndef __LIBSSH2_MBEDTLS_H
+--- a/zimodem/src/libssh2/misc.c
++++ b/zimodem/src/libssh2/misc.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2004-2007 Sara Golemon <sarag@libssh2.org>
+--- a/zimodem/src/libssh2/misc.h
++++ b/zimodem/src/libssh2/misc.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ #ifndef __LIBSSH2_MISC_H
+--- a/zimodem/src/libssh2/openssl.h
++++ b/zimodem/src/libssh2/openssl.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ #ifndef __LIBSSH2_OPENSSL_H
+--- a/zimodem/src/libssh2/packet.c
++++ b/zimodem/src/libssh2/packet.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2004-2007, Sara Golemon <sarag@libssh2.org>
+--- a/zimodem/src/libssh2/packet.h
++++ b/zimodem/src/libssh2/packet.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ #ifndef __LIBSSH2_PACKET_H
+--- a/zimodem/src/libssh2/pem.c
++++ b/zimodem/src/libssh2/pem.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (C) 2007 The Written Word, Inc.
+--- a/zimodem/src/libssh2/session.c
++++ b/zimodem/src/libssh2/session.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2004-2007 Sara Golemon <sarag@libssh2.org>
+--- a/zimodem/src/libssh2/session.h
++++ b/zimodem/src/libssh2/session.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ #ifndef __LIBSSH2_SESSION_H
+--- a/zimodem/src/libssh2/sftp.h
++++ b/zimodem/src/libssh2/sftp.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ #ifndef __LIBSSH2_SFTP_H
+--- a/zimodem/src/libssh2/transport.c
++++ b/zimodem/src/libssh2/transport.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (C) 2007 The Written Word, Inc.  All rights reserved.
+--- a/zimodem/src/libssh2/transport.h
++++ b/zimodem/src/libssh2/transport.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ #ifndef __LIBSSH2_TRANSPORT_H
+--- a/zimodem/src/libssh2/userauth.c
++++ b/zimodem/src/libssh2/userauth.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2004-2007, Sara Golemon <sarag@libssh2.org>
+--- a/zimodem/src/libssh2/userauth.h
++++ b/zimodem/src/libssh2/userauth.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ #ifndef __LIBSSH2_USERAUTH_H
+--- a/zimodem/src/libssh2/userauth_kbd_packet.c
++++ b/zimodem/src/libssh2/userauth_kbd_packet.c
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2022, Xaver Loppenstedt <xaver@loppenstedt.de>
+--- a/zimodem/src/libssh2/userauth_kbd_packet.h
++++ b/zimodem/src/libssh2/userauth_kbd_packet.h
+@@ -1,2 +1,2 @@
+-#if defined(ESP32)
++#if defined(ESP32) || defined(ZIMODEM_HOST)
+ /* Copyright (c) 2022, Xaver Loppenstedt <xaver@loppenstedt.de>

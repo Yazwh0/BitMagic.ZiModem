@@ -141,6 +141,77 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(MbedTLS)
 unset(CMAKE_POLICY_VERSION_MINIMUM)
 
+# --- libssh2 (vendored) -------------------------------------------------------
+# Backs WiFiSSHClient (external/zimodem/zimodem/wifisshclient.h/.ino, INCLUDE_SSH), the
+# vendored sketch's SSH client, used whenever a phonebook/dial address has the form
+# user:pass@host:port with the secure flag set. The submodule already carries a full copy
+# of libssh2 (external/zimodem/zimodem/src/libssh2/) with an mbedTLS backend already
+# selected (LIBSSH2_MBEDTLS) -- patches 0013/0014 widen its ESP32-only guards and fix a
+# Windows portability gap in its config header, see docs/native-wrapper-spec.md.
+#
+# A separate static-lib target, not folded into zimodem_hal or zimodem_core directly,
+# mirroring exactly why zimodem_hal links mbedtls PRIVATE below: libssh2's own .c files
+# need mbedTLS's headers (via libssh2_priv.h -> crypto.h -> mbedtls.h) but nothing else
+# should -- zimodem_core (which links this) has no mbedTLS include path today and
+# shouldn't gain one just because it links WiFiSSHClient's implementation.
+#
+# Explicit source list, not file(GLOB): ${ZIMODEM_VENDOR_DIR} doesn't exist until
+# zimodem_vendor has run once, so a glob here would silently produce zero sources on a
+# clean configure. These are the only 18 client-side .c files that exist in the vendored
+# subset (no sftp.c/agent.c/scp.c/publickey.c -- this is already a client-shell-only
+# build, nothing to prune).
+add_library(libssh2 STATIC
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/bcrypt_pbkdf.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/blowfish.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/channel.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/comp.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/crypt.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/global.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/hostkey.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/keepalive.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/kex.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/mac.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/mbedtls.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/misc.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/packet.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/pem.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/session.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/transport.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/userauth.c
+    ${ZIMODEM_VENDOR_DIR}/zimodem/src/libssh2/userauth_kbd_packet.c
+)
+target_include_directories(libssh2 PUBLIC ${ZIMODEM_VENDOR_DIR}/zimodem)
+target_link_libraries(libssh2 PRIVATE mbedtls)
+add_dependencies(libssh2 zimodem_vendor)
+
+# patches/zimodem/0013 widens every src/libssh2/*.c/.h guard to
+# `#if defined(ESP32) || defined(ZIMODEM_HOST)`. ZIMODEM_HOST itself is only ever defined
+# by zimodem.ino's own preprocessor logic (`#elif defined(ZIMODEM_HOST_BUILD) # define
+# ZIMODEM_HOST`, patch 0001) -- which only takes effect *inside* zimodem_core.cpp's own
+# translation unit, after that #include is processed. libssh2's .c files are their own
+# separate translation units (this target), which never see zimodem.ino's content at all,
+# so without this they'd never see ZIMODEM_HOST defined and would compile to nothing
+# (confirmed: silently produces empty .obj files, not a build error -- the #if is simply
+# false). Defining it directly here, matching what zimodem_core's ZIMODEM_HOST_BUILD=1
+# ultimately resolves to, is what actually makes it visible to this target.
+target_compile_definitions(libssh2 PRIVATE ZIMODEM_HOST)
+if(WIN32)
+    # libssh2.h/libssh2_priv.h's own (unmodified, already-correct) Windows branches check
+    # bare `WIN32`, not `_WIN32` -- the macro MSVC actually predefines automatically. CMake's
+    # WIN32 variable is true on Windows regardless of generator, so this reliably lines the
+    # two up without touching upstream's otherwise-correct guards. patches/zimodem/0014
+    # deliberately keys off `_WIN32` (the compiler-predefined one) for the same reason.
+    #
+    # WIN32_LEAN_AND_MEAN: libssh2.h's WIN32 branch #includes <winsock2.h>, which (this SDK,
+    # like most) pulls in the *full* <windows.h> -- GDI/USER32 included -- unless this is
+    # defined first. Without it, windows.h's winuser.h fails to compile: Arduino.h's
+    # `#define INPUT 0`/`OUTPUT 1` (the pinMode direction constants, defined long before
+    # this point since Arduino.h is zimodem_core.cpp's first include) collide with
+    # winuser.h's own `INPUT`/`OUTPUT` identifiers. PUBLIC so it also applies wherever
+    # zimodem_core links this and re-includes libssh2.h transitively (wifisshclient.h).
+    target_compile_definitions(libssh2 PUBLIC WIN32 WIN32_LEAN_AND_MEAN)
+endif()
+
 add_subdirectory(hal)
 
 add_subdirectory(wrapper)

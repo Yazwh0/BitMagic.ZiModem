@@ -1,8 +1,9 @@
 # ZiModem Host Wrapper — Design Spec
 
-Status: core pipeline implemented and verified on Windows + Linux. Full protocol parity
-(SD-shell, SSH, SLIP/PPP) is still ahead — see [§7.7](#77-not-yet-implemented) and
-[§11](#11-testing-strategy) for exactly what's built vs. still open.
+Status: core pipeline implemented and verified on Windows + Linux, including the SSH
+client (§7.1a). Full protocol parity (SD-shell, SLIP/PPP) is still ahead — see
+[§7.7](#77-not-yet-implemented) and [§11](#11-testing-strategy) for exactly what's built
+vs. still open.
 
 ## 1. Purpose
 
@@ -68,8 +69,10 @@ files: `String`, `Stream`, `WiFiClient`/`WiFiServer`/`WiFiClientSecure`, `SPIFFS
 appear pervasively. There is no file in the sketch that is hardware-independent.
 
 `zimodem/src/libssh2/*` is a vendored copy of libssh2 (portable C, backend-agnostic via
-`crypto.h`), much less coupled to Arduino than the rest of the sketch — not yet wired
-into the host build (SSH is still excluded, see §7.7).
+`crypto.h`), much less coupled to Arduino than the rest of the sketch. Wired into the host
+build as its own CMake target (patches 0013-0017, §7.1a) — every file in it was wrapped
+top-to-bottom in `#if defined(ESP32)`, so this needed dedicated guard-widening rather than
+just enabling `INCLUDE_SSH`.
 
 Key hardware-facing surface inventory:
 
@@ -79,7 +82,7 @@ Key hardware-facing surface inventory:
 | TCP client | `WiFiClient`, `WiFiClientSecure` | `wificlientnode.h/.ino` |
 | TCP server | `WiFiServer` | `wifiservernode.h/.ino` |
 | UDP (NTP) | `WiFiUDP` | `rt_clock.h/.ino` |
-| SSH | libssh2 (vendored) over `WiFiClient` socket | `wifisshclient.h/.ino` (not yet compiled in) |
+| SSH | libssh2 (vendored) over its own raw socket (bypasses `WiFiClient`/`TcpSocket`) | `wifisshclient.h/.ino` |
 | Wi-Fi join/status | `WiFi.begin/status/localIP/disconnect`, plus scan (`AT+WIFI`) | `zimodem.ino`, `zcommand.ino` |
 | Flash config storage | `SPIFFS` | `zimodem.ino`, `zconfigmode.ino`, `phonebook.ino` |
 | SD-card shell | `SD.begin(cs)` / `SD.begin()`, `fs::File` | `zbrowser.ino` (not yet compiled in) |
@@ -90,7 +93,7 @@ Key hardware-facing surface inventory:
 | Random | `random()`, `randomSeed()` | `zircmode.ino` (nickname generation) |
 | Misc CRT gaps | `itoa()` (MSVC/avr-libc extension, absent on glibc), `dtostrf()` | `serout.ino` |
 
-This table *is* the HAL surface, and (bar SSH/SD, §7.7) it's implemented.
+This table *is* the HAL surface, and (bar SD, §7.7) it's implemented.
 
 ## 4. Architecture Overview
 
@@ -128,8 +131,8 @@ flowchart TB
     end
 
     A --> C
-    B -.not yet wired in.-> C
-    Patches[["patches/zimodem/*.patch (9 patches)"]] --> C
+    B --> C
+    Patches[["patches/zimodem/*.patch (17 patches)"]] --> C
     C --> J
     D --> J
     E --> J
@@ -168,6 +171,11 @@ BitMagic.ZiModem/
       0010-zimodem-enable-cmdrx16.patch      # compile in the Commander X16 I/O-card config
       0011-wificlient-host-tls.patch         # route secure dials through the real TLS client (§7.8)
       0012-banner-bitmagic.patch             # boot banner: "ZiModem BitMagic"
+      0013-libssh2-host-guards.patch         # widen all 39 src/libssh2/* ESP32 guards (§7.1a)
+      0014-libssh2-config-windows.patch      # libssh2_config.h Windows HAVE_* fixes (§7.1a)
+      0015-zimodem-enable-ssh.patch          # re-enable INCLUDE_SSH (§7.1a)
+      0016-wifisshclient-host-portability.patch  # closesocket/return/hostByName fixes (§7.1a)
+      0017-libssh2-socklen-windows.patch     # <ws2tcpip.h> for socklen_t (§7.1a)
       SERIES                     # ordered list of patches to apply, with rationale comments
   tools/
     Vendoring/                   # .NET console tool: `vendor` and `new-patch` subcommands
@@ -186,8 +194,10 @@ BitMagic.ZiModem/
         zimodem_host.cpp         # the C ABI implementation
       tests/
         test_smoke.cpp           # drives zimodem_core directly (4 tests)
-        test_c_abi.cpp           # drives the public C ABI (3 tests)
-    CMakeLists.txt
+        test_protocol.cpp        # protocol-level tests against real vendored code (6 tests)
+        test_ssh_protocol.cpp    # INCLUDE_SSH live test (§7.1a, §11.2)
+        test_c_abi.cpp           # drives the public C ABI (4 tests)
+    CMakeLists.txt                # top-level; also declares the libssh2 static-lib target (§7.1a)
   managed/
     ZiModem.Net/                 # C# binding library (P/Invoke + ZiModemDevice)
     ZiModem.Net.Tests/           # not yet created (open item, §11.3)
@@ -261,15 +271,16 @@ code and only patch via preprocessor macros. We're deliberately not doing that:
 ### 6.3 What belongs in a patch vs. what belongs in the HAL
 
 Patches are for **mechanical portability changes only** — never behavior changes. The
-9 patches actually in the tree, by category:
+patches in the tree (17 as of this writing), by category:
 
 - **Platform branch selection** (0001, 0002): adds a `ZIMODEM_HOST`/`ZIMODEM_HOST_BUILD`
   branch to the same `#if`/`#elif` ladders that already distinguish ESP32 from ESP8266
   (`zimodem.ino`, `pet2asc.h`), so host builds get their own `SerialConfig`/
   `debugPrintf`/pin/`HWSerial` definitions instead of silently falling into the ESP8266
-  branch. Also disables `INCLUDE_SSH`/`INCLUDE_SD_SHELL`/`INCLUDE_SLIP`/`INCLUDE_PPP`/
+  branch. Also disables `INCLUDE_SD_SHELL`/`INCLUDE_SLIP`/`INCLUDE_PPP`/
   `INCLUDE_PING`/`INCLUDE_OTH_UPDATES` for this build phase, via the *same* `#undef`
-  mechanism upstream already uses per-platform (§7.7).
+  mechanism upstream already uses per-platform (§7.7) -- `INCLUDE_SSH` is re-enabled by
+  0015, see §7.1a.
 - **No-VLA** (0003-0008): MSVC has no variable-length-array support (a GCC/
   arduino-esp32-toolchain extension the vendored code relies on in ~8 places), and VLAs
   aren't standard C++ on *any* compiler, so this is a genuine cross-platform gap, not
@@ -284,6 +295,14 @@ Patches are for **mechanical portability changes only** — never behavior chang
   calls `ZMode::` directly, so GCC's linker tolerates the missing base vtable slot but
   MSVC's doesn't (`LNK2001 unresolved external symbol`). Marking them `= 0` is the
   idiomatic, behavior-preserving fix — `ZMode` was never instantiated directly.
+- **libssh2 host enablement** (0013-0017, §7.1a): widens all 39 `src/libssh2/*` files'
+  `#if defined(ESP32)` guards to also cover `ZIMODEM_HOST` (0013); fixes
+  `libssh2_config.h`'s Windows gaps -- POSIX-only `HAVE_*` macros wrongly defined on
+  `_WIN32`, plus the missing `HAVE_IOCTLSOCKET`/`<ws2tcpip.h>` Windows actually needs
+  (0014, 0017); re-enables `INCLUDE_SSH` itself (0015); and three real portability bugs in
+  `wifisshclient.ino` found by reading it in full -- a POSIX-only `close(sock)`, a
+  missing `return` on the success path, and a call to an arduino-esp32-only static method
+  with no host equivalent (0016).
 
 Everything else — sockets, filesystem, timing, GPIO, `String`/`Stream`, missing CRT
 functions like `itoa` — is implemented by providing header-compatible replacement types
@@ -340,7 +359,56 @@ vendored sketch expects, one compat header per Arduino/ESP-IDF header it replace
 | `ESP.h` | `ESPClass` (`getSdkVersion`/`getFlashChipId`/`getCpuFreqMHz`/etc.) | fixed, host-appropriate placeholder values — there is no real flash chip or SDK to report | done |
 | `HardwareSerial.h` | `HardwareSerialCompat` (aliased to `HWSerial` via patch 0002) | `zimodem_hal::serial_port`'s virtual UART byte queues | done |
 | `WiFiClientSecure.h` | `WiFiClientSecure` (subclass of `WiFiClient`, overrides every I/O method as virtual) | `zimodem_hal::net::TlsSocket` — a real outbound TLS client over `TcpSocket` using bundled mbedTLS (2.28 LTS, static-linked, fetched by `native/CMakeLists.txt`). Non-verifying (`setInsecure()` is the sketch's only config call); does SNI. `patches/zimodem/0011` widens `createWiFiClient()`'s `#ifdef ZIMODEM_ESP32` guards to also cover `ZIMODEM_HOST` so secure dials (`FLAG_SECURE`, `https://`) actually get TLS instead of the ESP8266 plaintext fallback | done — see §7.8 |
-| `SD.h`, libssh2 crypto backend | — | not implemented | not started, §7.7 |
+| `SD.h` | — | not implemented | not started, §7.7 |
+
+libssh2 (`external/zimodem/zimodem/src/libssh2/`) isn't a compat header at all -- it's the
+vendored SSH *client library itself*, backing `wifisshclient.h`'s `WiFiSSHClient`. See
+§7.1a.
+
+### 7.1a SSH (`WiFiSSHClient`, `INCLUDE_SSH`)
+
+`WiFiSSHClient` bypasses the HAL entirely -- it opens its own raw BSD socket directly
+(`socket()`/`::connect()`) rather than going through `WiFiClient`/`zimodem_hal::net`, then
+drives libssh2 against that socket. Nothing needed adding to `TcpSocket` for this reason:
+libssh2's own `libssh2_session_handshake()` needs a genuine, pollable native socket
+handle (`fcntl`/`ioctlsocket`/`select` are called on it directly deep inside libssh2's own
+`session.c`), which an opaque `TcpSocket` wrapper couldn't provide anyway.
+
+libssh2 gets its own CMake static-library target (`native/CMakeLists.txt`), mirroring
+exactly why `zimodem_hal` links `mbedtls` `PRIVATE`: libssh2's own `.c` files need
+mbedTLS's headers (`LIBSSH2_MBEDTLS` is the only backend actually implemented in the
+vendored copy -- `openssl.h`/`libgcrypt.h` are unused dead headers, no matching `.c`),
+but nothing else should see them, and `zimodem_core` (which links this target) has no
+mbedTLS include path today. Two things worth knowing about this target specifically:
+
+- **`ZIMODEM_HOST` has to be defined directly as a compile definition on the `libssh2`
+  target.** It's normally only ever defined *inside* `zimodem.ino`'s own preprocessor
+  logic (`#elif defined(ZIMODEM_HOST_BUILD) # define ZIMODEM_HOST`, patch 0001), visible
+  only within `zimodem_core.cpp`'s one aggregated translation unit after that `#include`
+  runs. libssh2's `.c` files are their own independent translation units that never see
+  `zimodem.ino`'s content at all -- without this, patch 0013's widened guards silently
+  see `ZIMODEM_HOST` as undefined and every file compiles to nothing (confirmed: valid,
+  empty `.obj` files, not a build error).
+- **`WIN32_LEAN_AND_MEAN` does *not* prevent this Windows SDK's `windows.h` from pulling
+  in `winuser.h`** (its guard only wraps a later, smaller block). `Arduino.h`'s `#define
+  INPUT 0`/`OUTPUT 1` (pinMode direction constants) corrupt `winuser.h`'s own `INPUT`
+  struct typedef if `<winsock2.h>` (which unconditionally pulls `<windows.h>` on this SDK
+  unless something already has) gets included *after* `Arduino.h`. Fixed in
+  `zimodem_core.cpp` itself, not a patch: `#include <winsock2.h>` is forced before
+  `Arduino.h`, so Windows' own `INPUT` type is fully parsed while the identifier still
+  means what Windows expects; `Arduino.h`'s macro only shadows the plain-value meaning
+  for the rest of that translation unit afterward, which is all it's ever used for here.
+
+**Test coverage**: no cheap fake-server option exists (unlike IRC/HTTP's few-line
+plaintext handshakes) -- a compliant SSH peer needs a full KEX/encryption/framing
+exchange before anything happens, so a hand-rolled fake server would just be a second SSH
+implementation. `native/wrapper/tests/test_ssh_protocol.cpp` has one `[ssh][.live]` case
+instead, mirroring `test_tls.cpp`'s own `[.live]` pattern exactly: a phonebook entry
+written directly as `user:pass@host:port` (bypassing `ATP`/the `AT+irc`/`AT+config`
+add-entry menus, which both reject multi-colon addresses -- unrelated, pre-existing bugs),
+dialled against the public demo server `test.rebex.net:22`, asserting a real `CONNECT`
+comes back. Confirmed working end-to-end (real KEX, password auth, PTY + shell channel)
+against that server.
 
 ### 7.2 Execution model — native background thread + callbacks
 
@@ -425,10 +493,6 @@ upstream already uses per-platform (all `#undef`'d in patch 0001):
 - **`INCLUDE_SD_SHELL`** (and everything gated behind it: XMODEM/YMODEM/ZMODEM/Kermit/
   Punter, Comet64/HostCM, the file browser, CBM/pulse-dial modem emulation) — needs a
   virtual SD-card filesystem HAL, not yet built.
-- **`INCLUDE_SSH`** — needs libssh2 wired up against a crypto backend. The bundled
-  mbedTLS added for `WiFiClientSecure` (§7.8) is a candidate here too (libssh2 supports
-  an mbedTLS backend), which would keep the tree to one crypto dependency. Not wired up.
-  Independent of TLS dialing, which now works without it (§7.8).
 - **`INCLUDE_SLIP`**, **`INCLUDE_PPP`** — would need a virtual network-interface HAL
   piece with no obvious host analogue yet.
 - **`INCLUDE_PING`** — genuinely can't be ported without emulating raw lwIP ICMP
@@ -437,10 +501,11 @@ upstream already uses per-platform (all `#undef`'d in patch 0001):
 - **`INCLUDE_OTH_UPDATES`** (OTA firmware self-update) — no host equivalent makes
   sense; permanently out of scope.
 
-Everything **not** behind those flags compiles and has been manually verified working:
-core AT command engine, TCP dial/answer/phonebook, HTTP client, FTP client, and IRC
-mode (`INCLUDE_IRCC` is *not* excluded — it has no SD/SSH/lwIP dependency in the parts
-compiled in, confirmed by testing `AT+IRC` through the console app).
+Everything **not** behind those flags compiles and is at least manually verified working:
+core AT command engine, TCP dial/answer/phonebook, HTTP client, FTP client, IRC mode
+(`INCLUDE_IRCC` is *not* excluded — it has no SD/SSH/lwIP dependency in the parts
+compiled in, confirmed by testing `AT+IRC` through the console app), and — as of §7.1a —
+`INCLUDE_SSH`: `WiFiSSHClient`, confirmed working end-to-end against a real server.
 
 ### 7.8 ESP32 parity — what the host build has, and where it differs
 
@@ -461,6 +526,7 @@ what that means feature-by-feature versus firmware running on a real ESP32 I/O c
 | **TLS / `WiFiClientSecure`** (patch 0011, §7.1, §7.8-TLS below) | Secure dials (`FLAG_SECURE`, `https://`) do a genuine TLS handshake via bundled mbedTLS. |
 | `INCLUDE_CMDRX16` code paths (patch 0010) | `packetXOn` defaults false, `ATI1`/`ATI5` print the `X16:` prefix, updater path uses the x16 prefix — the non-pin parts of the X16 I/O-card behaviour in `zcommand.ino`. |
 | Modem control signal reporting (DCD/DSR/DTR/RI/RTS/CTS) | Surfaced as HAL events (§7.4) rather than real GPIO. |
+| **SSH / `WiFiSSHClient`** (patches 0013-0017, §7.1a) | A genuine libssh2 client, real KEX + password/keyboard-interactive auth + PTY/shell channel over its own raw socket -- confirmed end-to-end against a real public server. |
 
 **Deliberately different or reduced:**
 
@@ -477,7 +543,7 @@ what that means feature-by-feature versus firmware running on a real ESP32 I/O c
 
 **Absent entirely** (feature-flagged off in patch 0001 — see §7.7): SD-shell and the
 XMODEM/YMODEM/ZMODEM/Kermit/Punter transfer family, Comet64/HostCM, the file browser,
-CBM/pulse-dial modem emulation, SSH, SLIP, PPP, ICMP ping, OTA firmware self-update.
+CBM/pulse-dial modem emulation, SLIP, PPP, ICMP ping, OTA firmware self-update.
 
 ## 8. Native Wrapper — Public C ABI
 
@@ -655,8 +721,8 @@ Actual design (revised twice from the original sketch based on real testing feed
 
 ## 11. Testing Strategy
 
-**93 test cases total (+1 hidden `[.live]` TLS test), passing identically on both
-Windows (MSVC) and Linux (GCC, via WSL) as of this writing.**
+**93 test cases total (+2 hidden `[.live]` tests: TLS and SSH), passing identically on
+both Windows (MSVC) and Linux (GCC, via WSL) as of this writing.**
 
 ### 11.1 HAL unit tests (`native/hal/tests`, Catch2, no zimodem code involved) — 79 tests, done
 
@@ -702,6 +768,14 @@ trip → destroy` lifecycle, `ATDT` dial with DCD verified via the signal callba
 - `AT&G` over `ftp://` — documents a confirmed upstream bug rather than testing a
   working fetch (see below).
 
+**`test_ssh_protocol.cpp` (drives `zimodem_core` directly, 1 test, `[ssh][.live]`,
+done; §7.1a):** dials a phonebook entry with a `user:pass@host:port` address against the
+public demo server `test.rebex.net:22`, asserting `CONNECT` comes back — confirming a
+real end-to-end libssh2 handshake (KEX, password auth, PTY + shell channel). Hidden from
+a default offline `ctest` run, same as the TLS live case; run explicitly with
+`zimodem_core_tests "[.live]"`. No failure-path case: no cheap fake SSH peer exists,
+same reasoning as the "not yet covered" list below.
+
 **Two more confirmed upstream defects found while writing these tests** (same category
 as the IRC-echo bug already on file — left unpatched by choice, not silently fixed):
 - `ATP<num>=<mods>:<addr>,<notes>` (`ZCommand::doPhonebookCommand`) always returns
@@ -721,8 +795,7 @@ as the IRC-echo bug already on file — left unpatched by choice, not silently f
 
 **Not yet covered** (code compiles and works per manual console-app testing, but has no
 automated assertions):
-- Everything in §7.7 (SD-shell, SSH, SLIP/PPP) can't be tested since it isn't compiled
-  in yet.
+- Everything in §7.7 (SD-shell, SLIP/PPP) can't be tested since it isn't compiled in yet.
 - Golden request/response fixtures ported from upstream's `test.py` transcripts (see
   below) — not started.
 
@@ -755,13 +828,14 @@ via the `gh` CLI.
 
 ## 12. Open Decisions & Risks
 
-1. **TLS/crypto backend.** Resolved for TLS: bundled **mbedTLS 2.28 LTS**, fetched and
-   static-linked by `native/CMakeLists.txt`, backing `zimodem_hal::net::TlsSocket` /
-   `WiFiClientSecure` (§7.1, §7.8). Pinned to 2.28 specifically to avoid a Python/Jinja
-   codegen step and a git submodule in the fetched build; the cost is a TLS 1.2 ceiling
-   (§7.8). Still open: whether to reuse the same mbedTLS for libssh2 when SSH is done
-   (§7.7) or bring a second backend, and whether to move to a 3.x line (TLS 1.3) once the
-   build environment reliably has Python.
+1. **TLS/crypto backend.** Resolved for both TLS and SSH: bundled **mbedTLS 2.28 LTS**,
+   fetched and static-linked by `native/CMakeLists.txt`, backs `zimodem_hal::net::TlsSocket`
+   / `WiFiClientSecure` (§7.1, §7.8) *and* libssh2's `LIBSSH2_MBEDTLS` backend (§7.1a) —
+   one crypto dependency for both, as originally hoped. Pinned to 2.28 specifically to
+   avoid a Python/Jinja codegen step and a git submodule in the fetched build; the cost is
+   a TLS 1.2 ceiling (§7.8) and libssh2's `LIBSSH2_ED25519=0`/`LIBSSH2_DSA=0` (no
+   Ed25519/DSA host keys — RSA/ECDSA still available). Still open: whether to move to a
+   3.x mbedTLS line (TLS 1.3) once the build environment reliably has Python.
 2. **Wi-Fi semantics.** Implemented as "always report connected, against a fixed
    placeholder address, treat SSID-join commands as accepted no-ops" (§7.5). If a
    consumer wants to model real network presence/absence (e.g. simulate a disconnected
@@ -771,9 +845,10 @@ via the `gh` CLI.
    2 file transfer, Phase 3 HTTP/FTP/SD-shell, Phase 4 SSH, Phase 5 SLIP/PPP/IRC) turned
    out not to match reality once the code was actually read: HTTP, FTP, and IRC have no
    SD/SSH/lwIP dependency in the parts that compile, so they came "for free" alongside
-   the core AT engine rather than needing their own phase. What's actually left
-   (SD-shell/XMODEM family, SSH, SLIP/PPP) is tracked plainly in §7.7 now instead of a
-   phase numbering that didn't hold up.
+   the core AT engine rather than needing their own phase; SSH (§7.1a) turned out to be
+   its own self-contained phase, done. What's actually left (SD-shell/XMODEM family,
+   SLIP/PPP) is tracked plainly in §7.7 now instead of a phase numbering that didn't
+   hold up.
 4. **Real serial port later.** Still virtual/in-process only (§7.3), confirmed as a
    deliberate choice rather than revisited. The ABI shape (byte queues + callbacks, no
    assumption about the producer/consumer) hasn't been stress-tested against an actual
